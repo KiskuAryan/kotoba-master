@@ -71,6 +71,7 @@ class QuizQuestionOut(BaseModel):
     part_of_speech: str
     current_stars: int
     options: List[str]  # 4 choices shuffled (1 correct, 3 distractors)
+    is_retention_check: bool = False
 
 class QuizStatusOut(BaseModel):
     due_count: int

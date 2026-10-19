@@ -105,6 +105,8 @@ def test_quiz_status_and_session_batching(test_app):
     # Verify no duplicate word IDs in the same session batch
     word_ids = [q["word_id"] for q in session_data["questions"]]
     assert len(word_ids) == len(set(word_ids))  # Every word appears ONCE per session
+    for q in session_data["questions"]:
+        assert "is_retention_check" in q
 
 def test_quiz_with_review_queue(test_app):
     # Fetch next question from review queue

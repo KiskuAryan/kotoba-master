@@ -75,49 +75,181 @@ def update_mastery_rating(
 def build_review_session(
     db: Session,
     session_size: int = 10,
-    lesson_number: Optional[int] = None
+    lesson_number: Optional[int] = None,
+    include_retention_interleaving: bool = True
 ) -> Tuple[List[Word], bool, int]:
     """
-    Constructs a finite review batch (AHA Lab style):
-    1. If words are due (next_review_due <= now or None):
-       - Prioritizes lowest proficiency first (star_rating ASC), then oldest reviewed first.
-       - Each word appears exactly ONCE in this session.
-    2. If NO words are currently due (or all are equally mastered):
-       - Runs Early Practice by pulling lowest proficiency words first, then oldest review.
+    Constructs a finite review batch (AHA Lab style with cumulative interleaving):
+    1. If lesson_number is specified (e.g. Lesson 4, Lesson 16):
+       - Focus slots (~75% of batch) come from the target lesson (due words first, then early practice).
+       - Retention slots (~25% of batch) are sampled from previous chapters (< lesson_number)
+         favoring old mastered/near-mastered words (stars >= 3, or oldest reviewed) to ensure
+         long-term retention and prevent decay.
+    2. If lesson_number is None (All Active Lessons):
+       - Combines due / lower-proficiency words (~75%) with periodic retention checks
+         from higher-star words (~25%) so mastered words are periodically refreshed.
+    3. Each word appears strictly ONCE per session (no duplicates).
+    4. Words are shuffled so retention checks are naturally interleaved throughout the quiz.
     Returns: (session_words, is_early_practice, total_due_count)
     """
     now = datetime.now(timezone.utc)
+    selected_ids = set()
+    primary_words: List[Word] = []
+    retention_words: List[Word] = []
 
-    base_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
+    # Calculate overall due count for the user's current scope
+    base_scope = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
         UserProgress.is_in_review == True
     )
-
     if lesson_number:
-        base_query = base_query.filter(Word.lesson_number == lesson_number)
-
-    # 1. Count & collect DUE words
-    due_query = base_query.filter(
-        or_(
-            UserProgress.next_review_due.is_(None),
-            UserProgress.next_review_due <= now
-        )
-    )
-    due_count = due_query.count()
-
-    if due_count > 0:
-        # Prioritize: 1) Lowest proficiency (star_rating ASC), 2) Oldest reviewed (nulls first)
-        words = due_query.order_by(
-            UserProgress.star_rating.asc(),
-            UserProgress.last_reviewed_at.asc().nullsfirst()
-        ).limit(session_size).all()
-        return words, False, due_count
+        scope_due_count = base_scope.filter(
+            Word.lesson_number == lesson_number,
+            or_(UserProgress.next_review_due.is_(None), UserProgress.next_review_due <= now)
+        ).count()
     else:
-        # Early Practice mode: Pull lowest proficiency words first so practice is never empty
-        words = base_query.order_by(
+        scope_due_count = base_scope.filter(
+            or_(UserProgress.next_review_due.is_(None), UserProgress.next_review_due <= now)
+        ).count()
+
+    # Determine retention target count (approx 20-30% of session)
+    retention_target = 0
+    if include_retention_interleaving:
+        if lesson_number and lesson_number > 1:
+            retention_target = max(1, round(session_size * 0.25))
+        elif lesson_number is None:
+            retention_target = max(1, round(session_size * 0.25))
+
+    # --- Phase 1: Sample Interleaved Retention Words (from older chapters or high mastery) ---
+    if retention_target > 0:
+        if lesson_number and lesson_number > 1:
+            prev_scope = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
+                UserProgress.is_in_review == True,
+                Word.lesson_number < lesson_number
+            )
+        else:
+            # All chapters scope: sample near-mastered words (star_rating >= 3)
+            prev_scope = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
+                UserProgress.is_in_review == True,
+                UserProgress.star_rating >= 3
+            )
+
+        # 1a. Prioritize older words that are DUE first (star >= 3)
+        due_retention = prev_scope.filter(
+            UserProgress.star_rating >= 3,
+            or_(UserProgress.next_review_due.is_(None), UserProgress.next_review_due <= now)
+        ).order_by(
+            UserProgress.last_reviewed_at.asc().nullsfirst(),
+            func.random()
+        ).limit(retention_target).all()
+
+        for w in due_retention:
+            setattr(w, "is_retention_check", True)
+            retention_words.append(w)
+            selected_ids.add(w.id)
+
+        # 1b. If slots remain, sample non-due near-mastered words (oldest reviewed first)
+        if len(retention_words) < retention_target:
+            needed = retention_target - len(retention_words)
+            query_non_due = prev_scope.filter(UserProgress.star_rating >= 3)
+            if selected_ids:
+                query_non_due = query_non_due.filter(~Word.id.in_(selected_ids))
+            non_due_retention = query_non_due.order_by(
+                UserProgress.last_reviewed_at.asc().nullsfirst(),
+                func.random()
+            ).limit(needed).all()
+
+            for w in non_due_retention:
+                setattr(w, "is_retention_check", True)
+                retention_words.append(w)
+                selected_ids.add(w.id)
+
+        # 1c. If still needed and lesson_number > 1, allow any older chapter words (stars >= 1)
+        if len(retention_words) < retention_target and lesson_number and lesson_number > 1:
+            needed = retention_target - len(retention_words)
+            query_any_older = prev_scope
+            if selected_ids:
+                query_any_older = query_any_older.filter(~Word.id.in_(selected_ids))
+            any_older = query_any_older.order_by(
+                UserProgress.star_rating.desc(),
+                UserProgress.last_reviewed_at.asc().nullsfirst()
+            ).limit(needed).all()
+
+            for w in any_older:
+                setattr(w, "is_retention_check", True)
+                retention_words.append(w)
+                selected_ids.add(w.id)
+
+    # --- Phase 2: Sample Primary Focus Words ---
+    primary_needed = session_size - len(retention_words)
+    primary_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
+        UserProgress.is_in_review == True
+    )
+    if lesson_number:
+        primary_query = primary_query.filter(Word.lesson_number == lesson_number)
+    if selected_ids:
+        primary_query = primary_query.filter(~Word.id.in_(selected_ids))
+
+    # 2a. Due primary words (lowest star proficiency first, oldest reviewed first)
+    due_primary = primary_query.filter(
+        or_(UserProgress.next_review_due.is_(None), UserProgress.next_review_due <= now)
+    ).order_by(
+        UserProgress.star_rating.asc(),
+        UserProgress.last_reviewed_at.asc().nullsfirst()
+    ).limit(primary_needed).all()
+
+    for w in due_primary:
+        setattr(w, "is_retention_check", False)
+        primary_words.append(w)
+        selected_ids.add(w.id)
+
+    # 2b. If not enough due words, pull Early Practice words from target scope
+    if len(primary_words) < primary_needed:
+        needed = primary_needed - len(primary_words)
+        early_query = primary_query
+        if selected_ids:
+            early_query = early_query.filter(~Word.id.in_(selected_ids))
+        early_primary = early_query.order_by(
             UserProgress.star_rating.asc(),
             UserProgress.last_reviewed_at.asc().nullsfirst()
-        ).limit(session_size).all()
-        return words, True, 0
+        ).limit(needed).all()
+
+        for w in early_primary:
+            setattr(w, "is_retention_check", False)
+            primary_words.append(w)
+            selected_ids.add(w.id)
+
+    # 2c. If target lesson has fewer words than needed, top up from ANY active review words
+    if (len(primary_words) + len(retention_words)) < session_size:
+        needed = session_size - (len(primary_words) + len(retention_words))
+        topup_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
+            UserProgress.is_in_review == True
+        )
+        if selected_ids:
+            topup_query = topup_query.filter(~Word.id.in_(selected_ids))
+        topup_words = topup_query.order_by(
+            UserProgress.star_rating.asc(),
+            UserProgress.last_reviewed_at.asc().nullsfirst()
+        ).limit(needed).all()
+
+        for w in topup_words:
+            is_ret = True if (lesson_number and w.lesson_number != lesson_number) else False
+            setattr(w, "is_retention_check", is_ret)
+            if is_ret:
+                retention_words.append(w)
+            else:
+                primary_words.append(w)
+            selected_ids.add(w.id)
+
+    total_words = primary_words + retention_words
+    if not total_words:
+        return [], False, 0
+
+    is_early_practice = (scope_due_count == 0)
+
+    # Shuffle to interleave retention checks naturally throughout the session batch
+    random.shuffle(total_words)
+
+    return total_words, is_early_practice, scope_due_count
 
 
 def select_weighted_word(

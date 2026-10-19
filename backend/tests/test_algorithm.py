@@ -108,3 +108,77 @@ def test_generate_mcq_options(db_session):
     assert len(options) == 4
     assert len(set(options)) == 4  # All unique
     assert target.meaning in options
+
+def test_build_review_session_interleaving(db_session):
+    from app.algorithm import build_review_session
+
+    # Seed 10 words in Lesson 1 (mastered / high star)
+    for i in range(1, 11):
+        w = Word(
+            lesson_number=1,
+            kana=f"l1_word_{i}",
+            romaji=f"l1_romaji_{i}",
+            meaning=f"l1_meaning_{i}",
+            jlpt_level="N5",
+            part_of_speech="noun"
+        )
+        db_session.add(w)
+        db_session.flush()
+        db_session.add(UserProgress(
+            word_id=w.id,
+            star_rating=4,
+            is_in_review=True
+        ))
+
+    # Seed 10 words in Lesson 4 (currently active, 1-2 stars)
+    for i in range(1, 11):
+        w = Word(
+            lesson_number=4,
+            kana=f"l4_word_{i}",
+            romaji=f"l4_romaji_{i}",
+            meaning=f"l4_meaning_{i}",
+            jlpt_level="N5",
+            part_of_speech="noun"
+        )
+        db_session.add(w)
+        db_session.flush()
+        db_session.add(UserProgress(
+            word_id=w.id,
+            star_rating=1,
+            is_in_review=True
+        ))
+
+    db_session.commit()
+
+    # Build a 10-word review session targeting Lesson 4 with interleaving
+    words, is_early, due_count = build_review_session(
+        db_session,
+        session_size=10,
+        lesson_number=4,
+        include_retention_interleaving=True
+    )
+
+    assert len(words) == 10
+    # Every word must be unique
+    word_ids = [w.id for w in words]
+    assert len(word_ids) == len(set(word_ids))
+
+    # Check presence of primary lesson 4 words AND retention lesson 1 words
+    l4_words = [w for w in words if w.lesson_number == 4]
+    l1_retention_words = [w for w in words if w.lesson_number == 1]
+
+    # Lesson 4 should be the primary focus (~7-8 words)
+    assert len(l4_words) >= 6
+    # Lesson 1 should have interleaved retention checks (~2-3 words)
+    assert len(l1_retention_words) >= 1
+    for rw in l1_retention_words:
+        assert getattr(rw, "is_retention_check", False) is True
+
+    # If interleaving is disabled, 100% of words should come from Lesson 4
+    words_no_interleave, _, _ = build_review_session(
+        db_session,
+        session_size=10,
+        lesson_number=4,
+        include_retention_interleaving=False
+    )
+    assert all(w.lesson_number == 4 for w in words_no_interleave)

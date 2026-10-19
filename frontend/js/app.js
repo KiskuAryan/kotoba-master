@@ -34,6 +34,7 @@ const els = {
   learnMasteryFill: document.getElementById("learn-mastery-fill"),
   learnMasteryText: document.getElementById("learn-mastery-text"),
   addAllChapterBtn: document.getElementById("add-all-chapter-btn"),
+  reviewThisChapterBtn: document.getElementById("review-this-chapter-btn"),
   
   flashcardStage: document.getElementById("flashcard-stage"),
   flashcardInner: document.getElementById("flashcard-inner"),
@@ -67,7 +68,9 @@ const els = {
   lobbyDueCount: document.getElementById("lobby-due-count"),
   lobbyQueueCount: document.getElementById("lobby-queue-count"),
   lobbyNextDue: document.getElementById("lobby-next-due"),
+  reviewScopeSelect: document.getElementById("review-scope-select"),
   sessionSizeSelect: document.getElementById("session-size-select"),
+  interleaveCheckbox: document.getElementById("interleave-checkbox"),
   startSessionBtn: document.getElementById("start-session-btn"),
   startPracticeBtn: document.getElementById("start-practice-btn"),
 
@@ -78,6 +81,7 @@ const els = {
   quitSessionBtn: document.getElementById("quit-session-btn"),
   
   quizLessonBadge: document.getElementById("quiz-lesson-badge"),
+  quizRetentionBadge: document.getElementById("quiz-retention-badge"),
   quizPosBadge: document.getElementById("quiz-pos-badge"),
   quizStarRating: document.getElementById("quiz-star-rating"),
   quizPromptKanji: document.getElementById("quiz-prompt-kanji"),
@@ -169,13 +173,33 @@ async function loadChaptersList() {
     state.chapters = await res.json();
     
     els.chapterSelect.innerHTML = "";
-    state.chapters.forEach(chap => {
-      const opt = document.createElement("option");
-      opt.value = chap.lesson_number;
-      opt.textContent = `${chap.is_unlocked ? "🔓" : "🔒"} ${chap.title}`;
-      if (!chap.is_unlocked) opt.disabled = true;
-      els.chapterSelect.appendChild(opt);
-    });
+    if (els.reviewScopeSelect) {
+      const currentScope = els.reviewScopeSelect.value || "all";
+      els.reviewScopeSelect.innerHTML = `<option value="all">📚 All Unlocked Lessons</option>`;
+      state.chapters.forEach(chap => {
+        const opt = document.createElement("option");
+        opt.value = chap.lesson_number;
+        opt.textContent = `${chap.is_unlocked ? "🔓" : "🔒"} ${chap.title}`;
+        if (!chap.is_unlocked) opt.disabled = true;
+        els.chapterSelect.appendChild(opt);
+
+        if (chap.is_unlocked && els.reviewScopeSelect) {
+          const scopeOpt = document.createElement("option");
+          scopeOpt.value = chap.lesson_number;
+          scopeOpt.textContent = `Lesson ${chap.lesson_number}: ${chap.title}`;
+          els.reviewScopeSelect.appendChild(scopeOpt);
+        }
+      });
+      els.reviewScopeSelect.value = currentScope;
+    } else {
+      state.chapters.forEach(chap => {
+        const opt = document.createElement("option");
+        opt.value = chap.lesson_number;
+        opt.textContent = `${chap.is_unlocked ? "🔓" : "🔒"} ${chap.title}`;
+        if (!chap.is_unlocked) opt.disabled = true;
+        els.chapterSelect.appendChild(opt);
+      });
+    }
     
     els.chapterSelect.value = state.selectedLesson;
   } catch (err) {
@@ -368,8 +392,11 @@ async function loadReviewLobby() {
   els.quizActiveScreen.style.display = "none";
   els.quizCompletedScreen.style.display = "none";
 
+  const scope = (els.reviewScopeSelect && els.reviewScopeSelect.value !== "all") ? parseInt(els.reviewScopeSelect.value) : null;
+  const statusUrl = scope ? `/api/quiz/status?lesson=${scope}` : "/api/quiz/status";
+
   try {
-    const res = await fetch("/api/quiz/status");
+    const res = await fetch(statusUrl);
     const status = await res.json();
 
     els.lobbyDueCount.textContent = status.due_count;
@@ -414,9 +441,16 @@ async function loadReviewLobby() {
 // Start Session Handler
 async function startReviewSession(isEarlyPractice = false) {
   const size = parseInt(els.sessionSizeSelect.value) || 10;
+  const scope = (els.reviewScopeSelect && els.reviewScopeSelect.value !== "all") ? parseInt(els.reviewScopeSelect.value) : null;
+  const interleave = els.interleaveCheckbox ? els.interleaveCheckbox.checked : true;
+  
+  let url = `/api/quiz/session?size=${size}&interleave=${interleave}`;
+  if (scope) {
+    url += `&lesson=${scope}`;
+  }
   
   try {
-    const res = await fetch(`/api/quiz/session?size=${size}`);
+    const res = await fetch(url);
     if (!res.ok) {
       alert("Please add vocabulary to your Review Queue in the Learn section first!");
       switchTab("learn");
@@ -464,6 +498,23 @@ els.quitSessionBtn.addEventListener("click", () => {
   }
 });
 
+if (els.reviewScopeSelect) {
+  els.reviewScopeSelect.addEventListener("change", () => {
+    loadReviewLobby();
+  });
+}
+
+if (els.reviewThisChapterBtn) {
+  els.reviewThisChapterBtn.addEventListener("click", () => {
+    const lesson = state.selectedLesson;
+    switchTab("quiz");
+    if (els.reviewScopeSelect) {
+      els.reviewScopeSelect.value = lesson;
+    }
+    loadReviewLobby();
+  });
+}
+
 function renderCurrentSessionQuestion() {
   state.isQuizSubmitting = false;
   els.quizFeedbackCard.style.display = "none";
@@ -486,7 +537,25 @@ function renderCurrentSessionQuestion() {
   els.quizPromptKana.textContent = q.prompt_kanji ? q.prompt_kana : "";
   els.quizPromptRomaji.textContent = q.romaji;
   
-  els.quizLessonBadge.textContent = `Lesson ${q.lesson_number}`;
+  if (q.is_retention_check) {
+    if (els.quizRetentionBadge) {
+      els.quizRetentionBadge.style.display = "inline-flex";
+      els.quizRetentionBadge.textContent = `🔄 Past Retention Check (Lesson ${q.lesson_number})`;
+    }
+    els.quizLessonBadge.textContent = `Lesson ${q.lesson_number}`;
+    els.quizLessonBadge.style.background = "rgba(168, 85, 247, 0.25)";
+    els.quizLessonBadge.style.color = "#e9d5ff";
+    els.quizLessonBadge.style.borderColor = "rgba(168, 85, 247, 0.5)";
+  } else {
+    if (els.quizRetentionBadge) {
+      els.quizRetentionBadge.style.display = "none";
+    }
+    els.quizLessonBadge.textContent = `Lesson ${q.lesson_number}`;
+    els.quizLessonBadge.style.background = "rgba(14, 165, 233, 0.15)";
+    els.quizLessonBadge.style.color = "#38bdf8";
+    els.quizLessonBadge.style.borderColor = "rgba(56, 189, 248, 0.3)";
+  }
+
   els.quizPosBadge.textContent = q.part_of_speech;
   els.quizStarRating.innerHTML = renderStarIcons(q.current_stars);
 

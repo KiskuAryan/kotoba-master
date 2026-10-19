@@ -68,15 +68,23 @@ def get_quiz_status(
 def start_quiz_session(
     size: int = Query(10, ge=3, le=50, description="Session size (e.g. 5, 10, 20 words)"),
     lesson: Optional[int] = Query(None, description="Filter by Minna no Nihongo Lesson"),
+    interleave: bool = Query(True, description="Interleave retention checks from previous chapters"),
     db: Session = Depends(get_db)
 ):
     """
     Generates a finite, structured review session batch (AHA Lab style).
     Each word appears strictly ONCE per session.
     Pulls due words first, with lowest proficiency words appearing first.
+    If reviewing a chapter (e.g. Lesson 4, 16), interleaves retention checks from
+    previous mastered chapters so memory is refreshed periodically.
     If no words are currently due, initiates Early Practice with lowest proficiency words first.
     """
-    words, is_early, due_count = build_review_session(db, session_size=size, lesson_number=lesson)
+    words, is_early, due_count = build_review_session(
+        db,
+        session_size=size,
+        lesson_number=lesson,
+        include_retention_interleaving=interleave
+    )
 
     if not words:
         raise HTTPException(
@@ -88,6 +96,7 @@ def start_quiz_session(
     for word in words:
         stars = word.progress.star_rating if word.progress else 1
         options = generate_mcq_options(db, word)
+        is_retention = getattr(word, "is_retention_check", False)
         questions.append(QuizQuestionOut(
             word_id=word.id,
             lesson_number=word.lesson_number,
@@ -97,7 +106,8 @@ def start_quiz_session(
             jlpt_level=word.jlpt_level,
             part_of_speech=word.part_of_speech,
             current_stars=stars,
-            options=options
+            options=options,
+            is_retention_check=is_retention
         ))
 
     return QuizSessionOut(

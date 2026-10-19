@@ -54,9 +54,12 @@
           <strong id="learn-mastery-text" style="color: #38bdf8;">0%</strong>
         </div>
 
-        <div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
           <button id="add-all-chapter-btn" class="pill-btn" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); padding: 0.5rem 1rem;">
-            📥 Add All Chapter Words to Review
+            📥 Add All Chapter Words
+          </button>
+          <button id="review-this-chapter-btn" class="pill-btn" style="background: rgba(16, 185, 129, 0.2); color: #a7f3d0; border: 1px solid rgba(16, 185, 129, 0.4); padding: 0.5rem 1rem;">
+            🎯 Review Lesson
           </button>
         </div>
       </div>
@@ -160,14 +163,30 @@
             </div>
           </div>
 
-          <div style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
-            <label for="session-size-select" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Session Size:</label>
-            <select id="session-size-select" class="chapter-select" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-              <option value="5">5 Words (Quick)</option>
-              <option value="10" selected>10 Words (Standard)</option>
-              <option value="15">15 Words (Deep)</option>
-              <option value="25">25 Words (Full Lesson)</option>
-            </select>
+          <div style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="review-scope-select" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Scope:</label>
+              <select id="review-scope-select" class="chapter-select" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; max-width: 200px;">
+                <option value="all" selected>📚 All Unlocked Lessons</option>
+                <!-- Populated dynamically with Lessons 1-25 -->
+              </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="session-size-select" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Session Size:</label>
+              <select id="session-size-select" class="chapter-select" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                <option value="5">5 Words (Quick)</option>
+                <option value="10" selected>10 Words (Standard)</option>
+                <option value="15">15 Words (Deep)</option>
+                <option value="25">25 Words (Full Lesson)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.82rem; color: #cbd5e1;">
+            <input type="checkbox" id="interleave-checkbox" checked style="accent-color: #a855f7; width: 16px; height: 16px; cursor: pointer;">
+            <label for="interleave-checkbox" style="cursor: pointer;" title="Periodically mixes in mastered words from previous chapters so you never forget older vocabulary">
+              🔄 <strong>Interleave Retention Checks</strong> <span style="color: #c084fc;">(mix in past chapters)</span>
+            </label>
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.75rem; max-width: 320px; margin: 0 auto;">
@@ -200,8 +219,9 @@
           <!-- The Recall Card Stage -->
           <div class="card-stage">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-              <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                 <span id="quiz-lesson-badge" class="badge badge-lesson">Lesson 1</span>
+                <span id="quiz-retention-badge" class="badge" style="display: none; background: rgba(168, 85, 247, 0.25); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.5); font-weight: 700;">🔄 Past Retention Check</span>
                 <span id="quiz-pos-badge" class="badge" style="background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">noun</span>
               </div>
               <div id="quiz-star-rating" class="star-rating-display">
