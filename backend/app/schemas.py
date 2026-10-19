@@ -31,6 +31,7 @@ class ProgressOut(BaseModel):
     correct_attempts: int
     accuracy_rate: float
     last_reviewed_at: Optional[datetime] = None
+    next_review_due: Optional[datetime] = None
 
 class WordOut(WordBase):
     model_config = ConfigDict(from_attributes=True)
@@ -70,6 +71,18 @@ class QuizQuestionOut(BaseModel):
     part_of_speech: str
     current_stars: int
     options: List[str]  # 4 choices shuffled (1 correct, 3 distractors)
+
+class QuizStatusOut(BaseModel):
+    due_count: int
+    total_in_review: int
+    next_due_in_minutes: Optional[int] = None
+    can_early_practice: bool
+
+class QuizSessionOut(BaseModel):
+    total_questions: int
+    is_early_practice: bool
+    due_count: int
+    questions: List[QuizQuestionOut]
 
 class QuizAnswerSubmit(BaseModel):
     word_id: int

@@ -88,6 +88,24 @@ def test_add_to_review_queue(test_app):
     assert res_batch.status_code == 200
     assert res_batch.json()["added_count"] > 0
 
+def test_quiz_status_and_session_batching(test_app):
+    # Check status
+    res_status = test_app.get("/api/quiz/status")
+    assert res_status.status_code == 200
+    status_data = res_status.json()
+    assert status_data["total_in_review"] > 0
+
+    # Start a finite review session batch (size 5)
+    res_session = test_app.get("/api/quiz/session?size=5")
+    assert res_session.status_code == 200
+    session_data = res_session.json()
+    assert session_data["total_questions"] <= 5
+    assert len(session_data["questions"]) > 0
+
+    # Verify no duplicate word IDs in the same session batch
+    word_ids = [q["word_id"] for q in session_data["questions"]]
+    assert len(word_ids) == len(set(word_ids))  # Every word appears ONCE per session
+
 def test_quiz_with_review_queue(test_app):
     # Fetch next question from review queue
     res_next = test_app.get("/api/quiz/next?only_in_review=true")

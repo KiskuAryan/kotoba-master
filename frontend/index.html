@@ -135,77 +135,165 @@
     <section id="quiz-view" class="view-section">
       <div class="quiz-container">
         
-        <!-- Live Session Stats Bar -->
-        <div class="stats-bar">
-          <div style="display: flex; align-items: center; gap: 1rem;">
-            <span id="quiz-streak-display" style="color: var(--accent-gold); font-weight: 700;">🔥 0 Streak</span>
-            <span style="color: var(--text-muted);">Queue: <strong id="quiz-queue-count" style="color: #38bdf8;">0</strong> words</span>
-          </div>
-          <div style="color: var(--text-muted);">
-            Session Reviews: <strong id="session-count" style="color: #fff;">0</strong>
-          </div>
-        </div>
+        <!-- A. QUIZ LOBBY (Start Review Session) -->
+        <div id="quiz-lobby-screen" style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; padding: 2.5rem 2rem; text-align: center; max-width: 600px; margin: 0 auto; width: 100%;">
+          <div style="font-size: 3rem; margin-bottom: 0.5rem;">⏱️</div>
+          <h2 id="lobby-title" style="font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem;">Spaced Review Session</h2>
+          <p id="lobby-subtitle" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;">
+            Review vocabulary due for retention practice.
+          </p>
 
-        <!-- The Recall Card Stage -->
-        <div class="card-stage">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <span id="quiz-lesson-badge" class="badge badge-lesson">Lesson 1</span>
-              <span id="quiz-pos-badge" class="badge" style="background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">noun</span>
+          <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.75rem; display: flex; justify-content: space-around;">
+            <div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">DUE RIGHT NOW</div>
+              <div id="lobby-due-count" style="font-size: 1.8rem; font-weight: 800; color: #38bdf8;">0</div>
             </div>
-            <div id="quiz-star-rating" class="star-rating-display">
-              <!-- Rendered 5 stars -->
+            <div style="border-left: 1px solid var(--border-color);"></div>
+            <div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">TOTAL IN QUEUE</div>
+              <div id="lobby-queue-count" style="font-size: 1.8rem; font-weight: 800; color: #a7f3d0;">0</div>
+            </div>
+            <div style="border-left: 1px solid var(--border-color);"></div>
+            <div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">NEXT REVIEW IN</div>
+              <div id="lobby-next-due" style="font-size: 1.8rem; font-weight: 800; color: var(--accent-gold);">Now</div>
             </div>
           </div>
 
-          <div class="prompt-japanese">
-            <div id="quiz-prompt-kanji" class="prompt-kanji">私</div>
-            <div id="quiz-prompt-kana" class="prompt-kana">わたし</div>
-            <div id="quiz-prompt-romaji" class="prompt-romaji">watashi</div>
+          <div style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+            <label for="session-size-select" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Session Size:</label>
+            <select id="session-size-select" class="chapter-select" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+              <option value="5">5 Words (Quick)</option>
+              <option value="10" selected>10 Words (Standard)</option>
+              <option value="15">15 Words (Deep)</option>
+              <option value="25">25 Words (Full Lesson)</option>
+            </select>
           </div>
 
-          <button id="quiz-audio-btn" class="audio-btn" title="Listen to Japanese pronunciation">
-            <span>🔊 Pronounce</span>
-          </button>
-        </div>
-
-        <!-- 4 MCQ Options Grid -->
-        <div id="quiz-options-grid" class="options-grid">
-          <!-- Dynamically populated buttons -->
-        </div>
-
-        <!-- Instant Feedback Card -->
-        <div id="quiz-feedback-card" class="feedback-card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <div id="quiz-feedback-status" style="font-size: 1.1rem; font-weight: 700;">✓ Correct Recall!</div>
-            <div id="quiz-feedback-change" class="badge" style="padding: 0.25rem 0.75rem;">⭐ 1 → ⭐ 2 (+1 Star)</div>
-          </div>
-
-          <div style="background: rgba(0, 0, 0, 0.25); border-left: 3px solid var(--accent-blue); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem;">
-            <div id="quiz-example-ja" style="font-size: 1rem; font-weight: 500; color: #e2e8f0; margin-bottom: 0.25rem;"></div>
-            <div id="quiz-example-en" style="font-size: 0.85rem; color: var(--text-muted);"></div>
-          </div>
-
-          <!-- AI Sentence & Grammar Breakdown -->
-          <div id="ai-box" style="display: none; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.85rem;">
-            <div style="font-weight: 700; color: #a5b4fc; margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
-              <span>✨ AI Sentence &amp; Mnemonic Breakdown</span>
-              <span id="ai-source-badge" style="font-size: 0.7rem; opacity: 0.7;"></span>
-            </div>
-            <div id="ai-sentence" style="font-size: 0.95rem; font-weight: 500; color: #fff; margin-bottom: 0.2rem;"></div>
-            <div id="ai-romaji" style="font-style: italic; color: #cbd5e1; margin-bottom: 0.2rem;"></div>
-            <div id="ai-translation" style="color: #94a3b8; margin-bottom: 0.5rem;"></div>
-            <div id="ai-grammar" style="color: #e2e8f0; margin-bottom: 0.3rem;"></div>
-            <div id="ai-mnemonic" style="color: #fde047; font-weight: 500;"></div>
-          </div>
-
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <button id="ai-explain-btn" class="pill-btn" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); padding: 0.5rem 1rem;">
-              ✨ AI Context &amp; Mnemonic
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; max-width: 320px; margin: 0 auto;">
+            <button id="start-session-btn" class="btn-primary" style="justify-content: center; padding: 0.85rem; font-size: 1rem;">
+              🚀 Start Review Session
             </button>
-            <button id="quiz-next-btn" class="btn-primary">
-              <span>Next Word</span>
-              <span style="font-size: 0.8rem; opacity: 0.75; font-weight: 400;">[Enter ↵]</span>
+            <button id="start-practice-btn" class="pill-btn" style="background: rgba(255, 255, 255, 0.05); color: #cbd5e1; border: 1px solid var(--border-color); padding: 0.6rem;">
+              ⚡ Practice Ahead (Lowest Stars First)
+            </button>
+          </div>
+        </div>
+
+        <!-- B. ACTIVE QUIZ SESSION SCREEN -->
+        <div id="quiz-active-screen" style="display: none; flex-direction: column; gap: 1.5rem;">
+          
+          <!-- Live Session Stats Bar -->
+          <div class="stats-bar">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <span id="quiz-progress-indicator" style="font-weight: 700; color: #38bdf8;">Word 1 of 10</span>
+              <span id="quiz-session-type-badge" class="badge" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe;">Due Review</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+              <span id="quiz-streak-display" style="color: var(--accent-gold); font-weight: 700;">🔥 0 Streak</span>
+              <button id="quit-session-btn" class="pill-btn" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.15); color: #f87171;">
+                ✕ Exit
+              </button>
+            </div>
+          </div>
+
+          <!-- The Recall Card Stage -->
+          <div class="card-stage">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <span id="quiz-lesson-badge" class="badge badge-lesson">Lesson 1</span>
+                <span id="quiz-pos-badge" class="badge" style="background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">noun</span>
+              </div>
+              <div id="quiz-star-rating" class="star-rating-display">
+                <!-- Rendered 5 stars -->
+              </div>
+            </div>
+
+            <div class="prompt-japanese">
+              <div id="quiz-prompt-kanji" class="prompt-kanji">私</div>
+              <div id="quiz-prompt-kana" class="prompt-kana">わたし</div>
+              <div id="quiz-prompt-romaji" class="prompt-romaji">watashi</div>
+            </div>
+
+            <button id="quiz-audio-btn" class="audio-btn" title="Listen to Japanese pronunciation">
+              <span>🔊 Pronounce</span>
+            </button>
+          </div>
+
+          <!-- 4 MCQ Options Grid -->
+          <div id="quiz-options-grid" class="options-grid">
+            <!-- Dynamically populated buttons -->
+          </div>
+
+          <!-- Instant Feedback Card -->
+          <div id="quiz-feedback-card" class="feedback-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+              <div id="quiz-feedback-status" style="font-size: 1.1rem; font-weight: 700;">✓ Correct Recall!</div>
+              <div id="quiz-feedback-change" class="badge" style="padding: 0.25rem 0.75rem;">⭐ 1 → ⭐ 2 (+1 Star)</div>
+            </div>
+
+            <div style="background: rgba(0, 0, 0, 0.25); border-left: 3px solid var(--accent-blue); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem;">
+              <div id="quiz-example-ja" style="font-size: 1rem; font-weight: 500; color: #e2e8f0; margin-bottom: 0.25rem;"></div>
+              <div id="quiz-example-en" style="font-size: 0.85rem; color: var(--text-muted);"></div>
+            </div>
+
+            <!-- AI Sentence & Grammar Breakdown -->
+            <div id="ai-box" style="display: none; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.85rem;">
+              <div style="font-weight: 700; color: #a5b4fc; margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                <span>✨ AI Sentence &amp; Mnemonic Breakdown</span>
+                <span id="ai-source-badge" style="font-size: 0.7rem; opacity: 0.7;"></span>
+              </div>
+              <div id="ai-sentence" style="font-size: 0.95rem; font-weight: 500; color: #fff; margin-bottom: 0.2rem;"></div>
+              <div id="ai-romaji" style="font-style: italic; color: #cbd5e1; margin-bottom: 0.2rem;"></div>
+              <div id="ai-translation" style="color: #94a3b8; margin-bottom: 0.5rem;"></div>
+              <div id="ai-grammar" style="color: #e2e8f0; margin-bottom: 0.3rem;"></div>
+              <div id="ai-mnemonic" style="color: #fde047; font-weight: 500;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <button id="ai-explain-btn" class="pill-btn" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); padding: 0.5rem 1rem;">
+                ✨ AI Context &amp; Mnemonic
+              </button>
+              <button id="quiz-next-btn" class="btn-primary">
+                <span>Next Word</span>
+                <span style="font-size: 0.8rem; opacity: 0.75; font-weight: 400;">[Enter ↵]</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- C. SESSION COMPLETED SCREEN -->
+        <div id="quiz-completed-screen" style="display: none; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; padding: 2.5rem 2rem; text-align: center; max-width: 550px; margin: 0 auto; width: 100%;">
+          <div style="font-size: 3.5rem; margin-bottom: 0.5rem;">🎉</div>
+          <h2 style="font-size: 1.6rem; font-weight: 800; color: #a7f3d0; margin-bottom: 0.5rem;">Review Session Complete!</h2>
+          <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;">
+            You completed your spaced review batch. All words have been updated!
+          </p>
+
+          <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.75rem; display: flex; justify-content: space-around;">
+            <div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">SCORE</div>
+              <div id="summary-score" style="font-size: 1.8rem; font-weight: 800; color: #38bdf8;">10 / 10</div>
+            </div>
+            <div style="border-left: 1px solid var(--border-color);"></div>
+            <div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">ACCURACY</div>
+              <div id="summary-accuracy" style="font-size: 1.8rem; font-weight: 800; color: var(--accent-green);">100%</div>
+            </div>
+            <div style="border-left: 1px solid var(--border-color);"></div>
+            <div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">MAX STREAK</div>
+              <div id="summary-streak" style="font-size: 1.8rem; font-weight: 800; color: var(--accent-gold);">🔥 10</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; justify-content: center;">
+            <button id="summary-lobby-btn" class="pill-btn" style="background: rgba(255,255,255,0.08); color: #fff; padding: 0.75rem 1.25rem;">
+              Back to Review Lobby
+            </button>
+            <button id="summary-learn-btn" class="btn-primary" style="padding: 0.75rem 1.25rem;">
+              📖 Study More in Learn
             </button>
           </div>
         </div>

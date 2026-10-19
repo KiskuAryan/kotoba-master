@@ -2,26 +2,121 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from app.database import get_db
 from app.models import Word, UserProgress, QuizLog, ChapterProgress
-from app.schemas import QuizQuestionOut, QuizAnswerSubmit, QuizAnswerResult
-from app.algorithm import select_weighted_word, generate_mcq_options, update_mastery_rating
+from app.schemas import (
+    QuizQuestionOut,
+    QuizAnswerSubmit,
+    QuizAnswerResult,
+    QuizSessionOut,
+    QuizStatusOut
+)
+from app.algorithm import (
+    select_weighted_word,
+    generate_mcq_options,
+    update_mastery_rating,
+    build_review_session,
+    get_next_review_due_time
+)
 
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
-@router.get("/next", response_model=QuizQuestionOut)
-def get_next_question(
-    level: Optional[str] = Query(None, description="Filter by JLPT level: 'N5' or 'N4'"),
-    lesson: Optional[int] = Query(None, description="Filter by Minna no Nihongo Lesson (1-25)"),
-    only_in_review: bool = Query(True, description="Only test words added to user's review queue"),
-    exclude: Optional[str] = Query(None, description="Comma-separated IDs of recently answered words"),
+@router.get("/status", response_model=QuizStatusOut)
+def get_quiz_status(
+    lesson: Optional[int] = Query(None, description="Optional lesson filter"),
     db: Session = Depends(get_db)
 ):
     """
-    Returns the next recall question using inverse-weighted sampling.
-    Pulls strictly from words in the active review queue unless only_in_review=False.
+    Returns review queue status: how many words are due, how many in queue,
+    and minutes until the next scheduled review.
     """
+    now = datetime.now(timezone.utc)
+    base_query = db.query(UserProgress).filter(UserProgress.is_in_review == True)
+    if lesson:
+        w_ids = db.query(Word.id).filter(Word.lesson_number == lesson).subquery()
+        base_query = base_query.filter(UserProgress.word_id.in_(w_ids))
+
+    total_in_review = base_query.count()
+
+    due_count = base_query.filter(
+        or_(
+            UserProgress.next_review_due.is_(None),
+            UserProgress.next_review_due <= now
+        )
+    ).count()
+
+    # Find earliest upcoming review
+    next_due_word = base_query.filter(UserProgress.next_review_due > now).order_by(
+        UserProgress.next_review_due.asc()
+    ).first()
+
+    next_due_mins = None
+    if next_due_word and next_due_word.next_review_due:
+        diff = (next_due_word.next_review_due - now).total_seconds()
+        next_due_mins = max(1, int(diff // 60))
+
+    return QuizStatusOut(
+        due_count=due_count,
+        total_in_review=total_in_review,
+        next_due_in_minutes=next_due_mins,
+        can_early_practice=(total_in_review > 0)
+    )
+
+
+@router.get("/session", response_model=QuizSessionOut)
+def start_quiz_session(
+    size: int = Query(10, ge=3, le=50, description="Session size (e.g. 5, 10, 20 words)"),
+    lesson: Optional[int] = Query(None, description="Filter by Minna no Nihongo Lesson"),
+    db: Session = Depends(get_db)
+):
+    """
+    Generates a finite, structured review session batch (AHA Lab style).
+    Each word appears strictly ONCE per session.
+    Pulls due words first, with lowest proficiency words appearing first.
+    If no words are currently due, initiates Early Practice with lowest proficiency words first.
+    """
+    words, is_early, due_count = build_review_session(db, session_size=size, lesson_number=lesson)
+
+    if not words:
+        raise HTTPException(
+            status_code=404,
+            detail="EMPTY_REVIEW_QUEUE: Your review queue is empty. Study flashcards in Learn mode and add words to review!"
+        )
+
+    questions = []
+    for word in words:
+        stars = word.progress.star_rating if word.progress else 1
+        options = generate_mcq_options(db, word)
+        questions.append(QuizQuestionOut(
+            word_id=word.id,
+            lesson_number=word.lesson_number,
+            prompt_kanji=word.kanji,
+            prompt_kana=word.kana,
+            romaji=word.romaji,
+            jlpt_level=word.jlpt_level,
+            part_of_speech=word.part_of_speech,
+            current_stars=stars,
+            options=options
+        ))
+
+    return QuizSessionOut(
+        total_questions=len(questions),
+        is_early_practice=is_early,
+        due_count=due_count,
+        questions=questions
+    )
+
+
+@router.get("/next", response_model=QuizQuestionOut)
+def get_next_question(
+    level: Optional[str] = Query(None),
+    lesson: Optional[int] = Query(None),
+    only_in_review: bool = Query(True),
+    exclude: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Fallback single-question endpoint for quick ad-hoc review."""
     exclude_ids = []
     if exclude:
         try:
@@ -38,19 +133,15 @@ def get_next_question(
     )
 
     if not target_word:
-        # Check if the review queue is empty
         total_in_review = db.query(UserProgress).filter(UserProgress.is_in_review == True).count()
         if total_in_review == 0 and only_in_review:
             raise HTTPException(
                 status_code=404,
-                detail="EMPTY_REVIEW_QUEUE: Your review queue is empty. Go to the Learn section to study flashcards and click 'Add to Review'!"
+                detail="EMPTY_REVIEW_QUEUE: Your review queue is empty. Go to Learn section to add words!"
             )
         raise HTTPException(status_code=404, detail="No matching vocabulary words found.")
 
-    stars = 1
-    if target_word.progress:
-        stars = target_word.progress.star_rating
-
+    stars = target_word.progress.star_rating if target_word.progress else 1
     options = generate_mcq_options(db, target_word)
 
     return QuizQuestionOut(
@@ -65,14 +156,15 @@ def get_next_question(
         options=options
     )
 
+
 @router.post("/submit", response_model=QuizAnswerResult)
 def submit_quiz_answer(
     submission: QuizAnswerSubmit,
     db: Session = Depends(get_db)
 ):
     """
-    Evaluates submitted answer, updates 5-star mastery rating and streaks,
-    and checks if the chapter mastery unlocks the next lesson.
+    Evaluates answer, updates 5-star rating, schedules the next review due date
+    based on the word's star proficiency, and checks chapter unlocks.
     """
     word = db.query(Word).filter(Word.id == submission.word_id).first()
     if not word:
@@ -93,15 +185,19 @@ def submit_quiz_answer(
         is_correct=is_correct
     )
 
-    # Update progress record
+    # Schedule next review timestamp using Spaced Repetition interval
+    now = datetime.now(timezone.utc)
+    next_due = get_next_review_due_time(new_stars, is_correct)
+
     progress.star_rating = new_stars
     progress.correct_streak = new_streak
     progress.total_attempts += 1
     if is_correct:
         progress.correct_attempts += 1
-    progress.last_reviewed_at = datetime.now(timezone.utc)
+    progress.last_reviewed_at = now
+    progress.next_review_due = next_due
 
-    # Log quiz event
+    # Log quiz history
     quiz_log = QuizLog(
         word_id=word.id,
         selected_meaning=submission.selected_option,
@@ -112,13 +208,12 @@ def submit_quiz_answer(
     db.add(quiz_log)
     db.flush()
 
-    # Check Chapter Unlock Status (if current chapter reaches 75% mastery)
+    # Check Chapter Unlock
     chapter_unlocked = None
     lesson_num = word.lesson_number
     next_chap = db.query(ChapterProgress).filter_by(lesson_number=lesson_num + 1).first()
 
     if next_chap and not next_chap.is_unlocked:
-        # Calculate current chapter mastery
         lesson_words = db.query(Word.id).filter(Word.lesson_number == lesson_num).all()
         if lesson_words:
             w_ids = [w[0] for w in lesson_words]
@@ -129,7 +224,7 @@ def submit_quiz_answer(
             pct = (total_stars / max_stars) * 100
             if pct >= 75.0:
                 next_chap.is_unlocked = True
-                next_chap.unlocked_at = datetime.now(timezone.utc)
+                next_chap.unlocked_at = now
                 chapter_unlocked = next_chap.lesson_number
 
     db.commit()

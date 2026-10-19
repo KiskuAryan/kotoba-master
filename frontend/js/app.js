@@ -9,12 +9,18 @@ const state = {
   isCardFlipped: false,
   reviewQueueCount: 0,
   
-  // Quiz
-  currentQuizQuestion: null,
-  recentQuizIds: [],
-  isQuizSubmitting: false,
-  totalAnsweredSession: 0,
-  streakCount: 0
+  // Quiz Session State
+  session: {
+    active: false,
+    questions: [],
+    currentIndex: 0,
+    correctCount: 0,
+    currentStreak: 0,
+    maxStreak: 0,
+    size: 10,
+    isEarlyPractice: false
+  },
+  isQuizSubmitting: false
 };
 
 // --- DOM Cache ---
@@ -52,10 +58,25 @@ const els = {
   chapterListCount: document.getElementById("chapter-list-count"),
   chapterWordsGrid: document.getElementById("chapter-words-grid"),
 
-  // Review Mode
+  // Review Screens
+  quizLobbyScreen: document.getElementById("quiz-lobby-screen"),
+  quizActiveScreen: document.getElementById("quiz-active-screen"),
+  quizCompletedScreen: document.getElementById("quiz-completed-screen"),
+
+  // Review Lobby
+  lobbyDueCount: document.getElementById("lobby-due-count"),
+  lobbyQueueCount: document.getElementById("lobby-queue-count"),
+  lobbyNextDue: document.getElementById("lobby-next-due"),
+  sessionSizeSelect: document.getElementById("session-size-select"),
+  startSessionBtn: document.getElementById("start-session-btn"),
+  startPracticeBtn: document.getElementById("start-practice-btn"),
+
+  // Active Quiz
+  quizProgressIndicator: document.getElementById("quiz-progress-indicator"),
+  quizSessionTypeBadge: document.getElementById("quiz-session-type-badge"),
   quizStreakDisplay: document.getElementById("quiz-streak-display"),
-  quizQueueCount: document.getElementById("quiz-queue-count"),
-  sessionCount: document.getElementById("session-count"),
+  quitSessionBtn: document.getElementById("quit-session-btn"),
+  
   quizLessonBadge: document.getElementById("quiz-lesson-badge"),
   quizPosBadge: document.getElementById("quiz-pos-badge"),
   quizStarRating: document.getElementById("quiz-star-rating"),
@@ -70,6 +91,13 @@ const els = {
   quizExampleJa: document.getElementById("quiz-example-ja"),
   quizExampleEn: document.getElementById("quiz-example-en"),
   quizNextBtn: document.getElementById("quiz-next-btn"),
+
+  // Completed Screen
+  summaryScore: document.getElementById("summary-score"),
+  summaryAccuracy: document.getElementById("summary-accuracy"),
+  summaryStreak: document.getElementById("summary-streak"),
+  summaryLobbyBtn: document.getElementById("summary-lobby-btn"),
+  summaryLearnBtn: document.getElementById("summary-learn-btn"),
 
   // AI Breakdown
   aiBox: document.getElementById("ai-box"),
@@ -96,7 +124,7 @@ const els = {
   unlockModalCloseBtn: document.getElementById("unlock-modal-close-btn")
 };
 
-// --- Speech Synthesis (Japanese TTS) ---
+// --- Japanese TTS ---
 function playJapaneseAudio(text) {
   if (!("speechSynthesis" in window) || !text) return;
   window.speechSynthesis.cancel();
@@ -121,12 +149,11 @@ function switchTab(tabName) {
   state.activeTab = tabName;
 
   if (tabName === "learn") loadLesson(state.selectedLesson);
-  if (tabName === "quiz") fetchNextQuizQuestion();
+  if (tabName === "quiz") loadReviewLobby();
   if (tabName === "roadmap") loadRoadmap();
   if (tabName === "analytics") loadAnalytics();
 }
 
-// --- Helper: Render 5 Stars ---
 function renderStarIcons(starCount) {
   let html = "";
   for (let i = 1; i <= 5; i++) {
@@ -141,7 +168,6 @@ async function loadChaptersList() {
     const res = await fetch("/api/chapters");
     state.chapters = await res.json();
     
-    // Update Chapter Selector Dropdown
     els.chapterSelect.innerHTML = "";
     state.chapters.forEach(chap => {
       const opt = document.createElement("option");
@@ -168,13 +194,11 @@ async function loadLesson(lessonNumber) {
     const res = await fetch(`/api/chapters/${lessonNumber}/words`);
     state.chapterWords = await res.json();
     
-    // Update Chapter Info & Header
     const currentChap = state.chapters.find(c => c.lesson_number === lessonNumber);
     const masteryPct = currentChap ? currentChap.mastery_percentage : 0;
     els.learnMasteryFill.style.width = `${masteryPct}%`;
     els.learnMasteryText.textContent = `${masteryPct}%`;
 
-    els.chapterListTitle = document.getElementById("chapter-list-title");
     els.chapterListTitle.textContent = `Lesson ${lessonNumber} Vocabulary List`;
     els.chapterListCount.textContent = `${state.chapterWords.length} Words`;
 
@@ -199,25 +223,21 @@ function renderFlashcard(index) {
   if (!state.chapterWords || state.chapterWords.length === 0) return;
   const word = state.chapterWords[index];
   
-  // Front
   els.fcLessonBadge.textContent = `Lesson ${word.lesson_number}`;
   els.fcKanji.textContent = word.kanji || word.kana;
   els.fcKana.textContent = word.kanji ? word.kana : "";
   els.fcRomaji.textContent = word.romaji;
   
-  // Back
   els.fcPosBadge.textContent = word.part_of_speech;
   els.fcMeaning.textContent = word.meaning;
   els.fcExampleJa.textContent = word.example_ja || "—";
   els.fcExampleEn.textContent = word.example_en || "";
 
-  // Indicators & Review Status
   els.fcIndexIndicator.textContent = `Word ${index + 1} of ${state.chapterWords.length}`;
   
   const inReview = word.progress && word.progress.is_in_review;
   updateReviewToggleBtnState(inReview);
 
-  // Audio button
   els.fcAudioBtn.onclick = (e) => {
     e.stopPropagation();
     playJapaneseAudio(word.kanji || word.kana);
@@ -236,7 +256,6 @@ function updateReviewToggleBtnState(isInReview) {
   }
 }
 
-// Flashcard Controls
 els.flashcardStage.addEventListener("click", () => {
   state.isCardFlipped = !state.isCardFlipped;
   els.flashcardInner.classList.toggle("flipped", state.isCardFlipped);
@@ -269,12 +288,11 @@ els.fcReviewToggleBtn.addEventListener("click", async (e) => {
   const newStatus = !currentStatus;
 
   try {
-    const res = await fetch("/api/chapters/toggle-review", {
+    await fetch("/api/chapters/toggle-review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ word_id: word.id, is_in_review: newStatus })
     });
-    const data = await res.json();
     
     if (word.progress) word.progress.is_in_review = newStatus;
     updateReviewToggleBtnState(newStatus);
@@ -290,7 +308,6 @@ els.addAllChapterBtn.addEventListener("click", async () => {
     const res = await fetch(`/api/chapters/${state.selectedLesson}/add-all-to-review`, { method: "POST" });
     const data = await res.json();
     
-    // Update local state
     state.chapterWords.forEach(w => {
       if (w.progress) w.progress.is_in_review = true;
     });
@@ -332,7 +349,6 @@ function renderChapterWordsTable() {
       </div>
     `;
 
-    // Click on row to view in flashcard
     row.addEventListener("click", () => {
       state.currentCardIndex = idx;
       state.isCardFlipped = false;
@@ -345,8 +361,97 @@ function renderChapterWordsTable() {
   });
 }
 
-// ==================== 2. REVIEW MODE (5-STAR MCQ) ====================
-async function fetchNextQuizQuestion() {
+// ==================== 2. REVIEW SESSION LOGIC (AHA LAB MODEL) ====================
+async function loadReviewLobby() {
+  // Show lobby screen, hide active and completed
+  els.quizLobbyScreen.style.display = "block";
+  els.quizActiveScreen.style.display = "none";
+  els.quizCompletedScreen.style.display = "none";
+
+  try {
+    const res = await fetch("/api/quiz/status");
+    const status = await res.json();
+
+    els.lobbyDueCount.textContent = status.due_count;
+    els.lobbyQueueCount.textContent = status.total_in_review;
+    
+    if (status.due_count > 0) {
+      els.lobbyNextDue.textContent = "Ready!";
+      els.lobbyNextDue.style.color = "var(--accent-green)";
+      els.startSessionBtn.disabled = false;
+      els.startSessionBtn.textContent = `🚀 Start Due Review (${status.due_count} Due)`;
+    } else if (status.next_due_in_minutes) {
+      els.lobbyNextDue.textContent = `${status.next_due_in_minutes}m`;
+      els.lobbyNextDue.style.color = "var(--accent-gold)";
+      els.startSessionBtn.disabled = true;
+      els.startSessionBtn.textContent = `⏳ No Words Due Right Now`;
+    } else {
+      els.lobbyNextDue.textContent = status.total_in_review === 0 ? "—" : "Ready";
+      els.startSessionBtn.disabled = status.total_in_review === 0;
+      els.startSessionBtn.textContent = `🚀 Start Review Session`;
+    }
+
+    els.startPracticeBtn.style.display = status.total_in_review > 0 ? "block" : "none";
+    refreshReviewBadge();
+  } catch (err) {
+    console.error("Error loading review status:", err);
+  }
+}
+
+// Start Session Handler
+async function startReviewSession(isEarlyPractice = false) {
+  const size = parseInt(els.sessionSizeSelect.value) || 10;
+  
+  try {
+    const res = await fetch(`/api/quiz/session?size=${size}`);
+    if (!res.ok) {
+      alert("Please add vocabulary to your Review Queue in the Learn section first!");
+      switchTab("learn");
+      return;
+    }
+
+    const data = await res.json();
+    if (!data.questions || data.questions.length === 0) {
+      alert("No words available in review queue.");
+      return;
+    }
+
+    // Initialize session state
+    state.session = {
+      active: true,
+      questions: data.questions,
+      currentIndex: 0,
+      correctCount: 0,
+      currentStreak: 0,
+      maxStreak: 0,
+      size: data.questions.length,
+      isEarlyPractice: isEarlyPractice || data.is_early_practice
+    };
+
+    // Transition to Active Quiz Screen
+    els.quizLobbyScreen.style.display = "none";
+    els.quizCompletedScreen.style.display = "none";
+    els.quizActiveScreen.style.display = "flex";
+
+    els.quizSessionTypeBadge.textContent = state.session.isEarlyPractice ? "⚡ Early Practice (Weakest First)" : "⏱️ Due Review";
+    els.quizSessionTypeBadge.style.background = state.session.isEarlyPractice ? "rgba(245, 158, 11, 0.2)" : "rgba(16, 185, 129, 0.2)";
+    els.quizSessionTypeBadge.style.color = state.session.isEarlyPractice ? "#fde047" : "#a7f3d0";
+
+    renderCurrentSessionQuestion();
+  } catch (err) {
+    console.error("Error starting review session:", err);
+  }
+}
+
+els.startSessionBtn.addEventListener("click", () => startReviewSession(false));
+els.startPracticeBtn.addEventListener("click", () => startReviewSession(true));
+els.quitSessionBtn.addEventListener("click", () => {
+  if (confirm("Exit current review session?")) {
+    loadReviewLobby();
+  }
+});
+
+function renderCurrentSessionQuestion() {
   state.isQuizSubmitting = false;
   els.quizFeedbackCard.style.display = "none";
   if (els.aiBox) els.aiBox.style.display = "none";
@@ -355,59 +460,14 @@ async function fetchNextQuizQuestion() {
     els.aiExplainBtn.textContent = "✨ AI Context & Mnemonic";
   }
 
-  els.quizOptionsGrid.innerHTML = `<div style="grid-column: span 2; text-align: center; color: var(--text-muted); padding: 2rem;">Loading next review card...</div>`;
+  const q = state.session.questions[state.session.currentIndex];
+  const idx = state.session.currentIndex;
+  const total = state.session.questions.length;
 
-  try {
-    let url = `/api/quiz/next?only_in_review=true`;
-    if (state.recentQuizIds.length > 0) {
-      url += `&exclude=${state.recentQuizIds.slice(-5).join(",")}`;
-    }
+  // Header & Indicators
+  els.quizProgressIndicator.textContent = `Word ${idx + 1} of ${total}`;
+  els.quizStreakDisplay.textContent = `🔥 ${state.session.currentStreak} Streak`;
 
-    const res = await fetch(url);
-    if (!res.ok) {
-      const errData = await res.json();
-      if (res.status === 404 && errData.detail && errData.detail.includes("EMPTY_REVIEW_QUEUE")) {
-        renderEmptyReviewState();
-        return;
-      }
-      throw new Error("Failed to load question");
-    }
-
-    const q = await res.json();
-    state.currentQuizQuestion = q;
-    state.recentQuizIds.push(q.word_id);
-    if (state.recentQuizIds.length > 10) state.recentQuizIds.shift();
-
-    renderQuizQuestion(q);
-    refreshReviewBadge();
-  } catch (err) {
-    els.quizOptionsGrid.innerHTML = `<div style="grid-column: span 2; text-align: center; color: var(--accent-red); padding: 1.5rem;">Error loading review question.</div>`;
-  }
-}
-
-function renderEmptyReviewState() {
-  els.quizPromptKanji.textContent = "🌱";
-  els.quizPromptKana.textContent = "Review Queue is Empty";
-  els.quizPromptRomaji.textContent = "Start by learning vocabulary!";
-  els.quizStarRating.innerHTML = "";
-  els.quizLessonBadge.textContent = "Step 1";
-  els.quizPosBadge.textContent = "Guide";
-  els.quizAudioBtn.style.display = "none";
-
-  els.quizOptionsGrid.innerHTML = `
-    <div style="grid-column: span 2; background: var(--bg-card); border: 1px dashed var(--accent-blue); border-radius: 12px; padding: 2rem; text-align: center;">
-      <h3 style="font-size: 1.15rem; color: #fff; margin-bottom: 0.5rem;">No words in your review queue yet!</h3>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem;">
-        Following the Minna no Nihongo curriculum, first study Lesson 1 flashcards and click <strong>"Add to Review Queue"</strong>.
-      </p>
-      <button class="btn-primary" style="margin: 0 auto;" onclick="switchTab('learn')">
-        📖 Go to Learn Section →
-      </button>
-    </div>
-  `;
-}
-
-function renderQuizQuestion(q) {
   els.quizAudioBtn.style.display = "inline-flex";
   els.quizPromptKanji.textContent = q.prompt_kanji || q.prompt_kana;
   els.quizPromptKana.textContent = q.prompt_kanji ? q.prompt_kana : "";
@@ -417,11 +477,12 @@ function renderQuizQuestion(q) {
   els.quizPosBadge.textContent = q.part_of_speech;
   els.quizStarRating.innerHTML = renderStarIcons(q.current_stars);
 
+  // Render Choices
   els.quizOptionsGrid.innerHTML = "";
-  q.options.forEach((opt, idx) => {
+  q.options.forEach((opt, optIdx) => {
     const btn = document.createElement("button");
     btn.className = "option-btn";
-    btn.innerHTML = `<span>${opt}</span><span class="option-key">${idx + 1}</span>`;
+    btn.innerHTML = `<span>${opt}</span><span class="option-key">${optIdx + 1}</span>`;
     btn.addEventListener("click", () => handleQuizSubmit(opt, btn));
     els.quizOptionsGrid.appendChild(btn);
   });
@@ -430,9 +491,10 @@ function renderQuizQuestion(q) {
 }
 
 async function handleQuizSubmit(selectedOption, clickedBtn) {
-  if (state.isQuizSubmitting || !state.currentQuizQuestion) return;
+  if (state.isQuizSubmitting || !state.session.active) return;
   state.isQuizSubmitting = true;
 
+  const currentQ = state.session.questions[state.session.currentIndex];
   const buttons = els.quizOptionsGrid.querySelectorAll(".option-btn");
   buttons.forEach(b => b.disabled = true);
 
@@ -441,17 +503,27 @@ async function handleQuizSubmit(selectedOption, clickedBtn) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        word_id: state.currentQuizQuestion.word_id,
+        word_id: currentQ.word_id,
         selected_option: selectedOption
       })
     });
 
     const result = await res.json();
-    state.totalAnsweredSession++;
-    els.sessionCount.textContent = state.totalAnsweredSession;
-    state.streakCount = result.correct_streak;
-    els.quizStreakDisplay.textContent = `🔥 ${result.correct_streak} Streak`;
+    
+    // Update streak and scores
+    if (result.is_correct) {
+      state.session.correctCount++;
+      state.session.currentStreak++;
+      if (state.session.currentStreak > state.session.maxStreak) {
+        state.session.maxStreak = state.session.currentStreak;
+      }
+      playJapaneseAudio(currentQ.prompt_kanji || currentQ.prompt_kana);
+    } else {
+      state.session.currentStreak = 0;
+    }
+    els.quizStreakDisplay.textContent = `🔥 ${state.session.currentStreak} Streak`;
 
+    // Visual button states
     buttons.forEach(btn => {
       const text = btn.querySelector("span").textContent;
       if (text.toLowerCase() === result.correct_meaning.toLowerCase()) {
@@ -461,18 +533,14 @@ async function handleQuizSubmit(selectedOption, clickedBtn) {
       }
     });
 
-    if (result.is_correct) {
-      playJapaneseAudio(state.currentQuizQuestion.prompt_kanji || state.currentQuizQuestion.prompt_kana);
-    }
-
     showQuizFeedback(result);
 
-    // Check if new chapter unlocked!
+    // Chapter Unlock Check
     if (result.chapter_unlocked) {
       triggerUnlockCelebration(result.chapter_unlocked);
     }
   } catch (err) {
-    console.error("Error submitting answer:", err);
+    console.error("Error submitting quiz answer:", err);
   }
 }
 
@@ -506,23 +574,32 @@ function showQuizFeedback(result) {
   els.quizExampleJa.textContent = result.example_ja || "—";
   els.quizExampleEn.textContent = result.example_en || "";
 
-  els.quizNextBtn.onclick = () => fetchNextQuizQuestion();
+  // Check if this was the last question in the session
+  const isLastQuestion = (state.session.currentIndex >= state.session.questions.length - 1);
+  if (isLastQuestion) {
+    els.quizNextBtn.innerHTML = `<span>Complete Session 🏁</span>`;
+    els.quizNextBtn.onclick = () => showSessionCompleted();
+  } else {
+    els.quizNextBtn.innerHTML = `<span>Next Word</span> <span style="font-size: 0.8rem; opacity: 0.75;">[Enter ↵]</span>`;
+    els.quizNextBtn.onclick = () => advanceSession();
+  }
   els.quizNextBtn.focus();
 
-  // AI Handler
+  // AI Context
   if (els.aiExplainBtn) {
     els.aiExplainBtn.onclick = async () => {
       els.aiExplainBtn.disabled = true;
       els.aiExplainBtn.textContent = "⏳ Generating AI Context...";
+      const currentQ = state.session.questions[state.session.currentIndex];
       try {
         const res = await fetch("/api/ai/explain", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            word: state.currentQuizQuestion.prompt_kanji || state.currentQuizQuestion.prompt_kana,
-            kana: state.currentQuizQuestion.prompt_kana,
+            word: currentQ.prompt_kanji || currentQ.prompt_kana,
+            kana: currentQ.prompt_kana,
             meaning: result.correct_meaning,
-            level: state.currentQuizQuestion.jlpt_level
+            level: currentQ.jlpt_level
           })
         });
         const aiData = await res.json();
@@ -541,7 +618,31 @@ function showQuizFeedback(result) {
   }
 }
 
-// Celebration Modal
+function advanceSession() {
+  state.session.currentIndex++;
+  renderCurrentSessionQuestion();
+}
+
+function showSessionCompleted() {
+  state.session.active = false;
+  els.quizActiveScreen.style.display = "none";
+  els.quizCompletedScreen.style.display = "block";
+
+  const total = state.session.questions.length;
+  const correct = state.session.correctCount;
+  const pct = Math.round((correct / total) * 100);
+
+  els.summaryScore.textContent = `${correct} / ${total}`;
+  els.summaryAccuracy.textContent = `${pct}%`;
+  els.summaryStreak.textContent = `🔥 ${state.session.maxStreak}`;
+
+  refreshReviewBadge();
+  loadChaptersList();
+}
+
+els.summaryLobbyBtn.addEventListener("click", () => loadReviewLobby());
+els.summaryLearnBtn.addEventListener("click", () => switchTab("learn"));
+
 function triggerUnlockCelebration(unlockedLessonNumber) {
   els.unlockModalMessage.innerHTML = `
     Congratulations! You reached <strong>75%+ Mastery</strong> on the previous lesson.<br><br>
@@ -608,7 +709,7 @@ async function loadRoadmap() {
   }
 }
 
-// ==================== 4. ANALYTICS & UTILS ====================
+// ==================== 4. ANALYTICS & PROGRESS ====================
 async function loadAnalytics() {
   try {
     const res = await fetch("/api/decks/summary");
@@ -649,10 +750,9 @@ async function loadAnalytics() {
 
 async function refreshReviewBadge() {
   try {
-    const res = await fetch("/api/decks/summary");
+    const res = await fetch("/api/quiz/status");
     const data = await res.json();
-    els.reviewBadgeCount.textContent = data.words_in_review || 0;
-    els.quizQueueCount.textContent = data.words_in_review || 0;
+    els.reviewBadgeCount.textContent = data.due_count || 0;
   } catch (err) {}
 }
 
@@ -669,7 +769,6 @@ if (els.resetBtn) {
 
 // Global Keyboard Shortcuts
 window.addEventListener("keydown", (e) => {
-  // Space flips card in Learn mode, or advances quiz feedback in Quiz mode
   if (e.key === " " && state.activeTab === "learn") {
     e.preventDefault();
     state.isCardFlipped = !state.isCardFlipped;
@@ -681,7 +780,7 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") els.fcNextBtn.click();
   }
 
-  if (state.activeTab === "quiz") {
+  if (state.activeTab === "quiz" && state.session.active) {
     if (!state.isQuizSubmitting && ["1", "2", "3", "4"].includes(e.key)) {
       const idx = parseInt(e.key) - 1;
       const buttons = els.quizOptionsGrid.querySelectorAll(".option-btn");
@@ -689,12 +788,12 @@ window.addEventListener("keydown", (e) => {
     }
     if (state.isQuizSubmitting && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
-      fetchNextQuizQuestion();
+      els.quizNextBtn.click();
     }
   }
 });
 
-// App Initialization
+// Init on Load
 document.addEventListener("DOMContentLoaded", async () => {
   initNavigation();
   await loadChaptersList();

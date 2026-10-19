@@ -1,41 +1,57 @@
 import random
 from typing import List, Tuple, Optional
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from app.models import Word, UserProgress
 
-# Inverse weighting table: Lower stars appear far more frequently
+# Inverse weighting table
 STAR_WEIGHTS = {
-    1: 10.0,  # 1 Star: Unfamiliar / Struggling (High probability)
-    2: 6.0,   # 2 Stars: Learning
-    3: 3.0,   # 3 Stars: Familiar
-    4: 1.0,   # 4 Stars: Strong
-    5: 0.2    # 5 Stars: Mastered (Rare review)
+    1: 10.0,
+    2: 6.0,
+    3: 3.0,
+    4: 1.0,
+    5: 0.2
 }
 
 # Consecutive correct recalls needed to graduate to next star
 STREAK_REQUIREMENTS = {
-    1: 1,  # 1 -> 2: Needs 1 correct
-    2: 2,  # 2 -> 3: Needs 2 consecutive
-    3: 4,  # 3 -> 4: Needs 4 consecutive
-    4: 6,  # 4 -> 5: Needs 6 consecutive
-    5: 8   # Mastered retention
+    1: 1,
+    2: 2,
+    3: 4,
+    4: 6,
+    5: 8
 }
+
+# Spaced Review Intervals (in minutes) based on AHA Lab SRS model
+STAR_INTERVALS_MINUTES = {
+    1: 10,       # 1 Star: 10 mins (unfamiliar / struggling)
+    2: 120,      # 2 Stars: 2 hours
+    3: 1440,     # 3 Stars: 24 hours (1 day)
+    4: 4320,     # 4 Stars: 3 days
+    5: 10080     # 5 Stars: 7 days
+}
+
+def get_next_review_due_time(star_rating: int, is_correct: bool) -> datetime:
+    """Computes the timestamp when the word should next appear for review."""
+    now = datetime.now(timezone.utc)
+    if is_correct:
+        mins = STAR_INTERVALS_MINUTES.get(star_rating, 60)
+        return now + timedelta(minutes=mins)
+    else:
+        # Mistakes reappear in 5 minutes for quick reinforcement
+        return now + timedelta(minutes=5)
 
 def update_mastery_rating(
     current_stars: int,
     current_streak: int,
     is_correct: bool
 ) -> Tuple[int, int, int]:
-    """
-    Computes new star rating and streak following the 5-star SRS model.
-    Returns: (new_stars, new_streak, star_change)
-    """
+    """Computes new star rating and streak."""
     if is_correct:
         new_streak = current_streak + 1
         new_stars = current_stars
         
-        # Check if streak satisfies graduation threshold
         if current_stars < 5:
             required = STREAK_REQUIREMENTS.get(current_stars, 2)
             if new_streak >= required:
@@ -44,10 +60,7 @@ def update_mastery_rating(
         star_change = new_stars - current_stars
         return new_stars, new_streak, star_change
     else:
-        # Reset streak on error
         new_streak = 0
-        
-        # Demote stars on error (higher stars lose 2 levels, lower stars lose 1)
         if current_stars >= 4:
             new_stars = current_stars - 2
         elif current_stars > 1:
@@ -59,6 +72,54 @@ def update_mastery_rating(
         return new_stars, new_streak, star_change
 
 
+def build_review_session(
+    db: Session,
+    session_size: int = 10,
+    lesson_number: Optional[int] = None
+) -> Tuple[List[Word], bool, int]:
+    """
+    Constructs a finite review batch (AHA Lab style):
+    1. If words are due (next_review_due <= now or None):
+       - Prioritizes lowest proficiency first (star_rating ASC), then oldest reviewed first.
+       - Each word appears exactly ONCE in this session.
+    2. If NO words are currently due (or all are equally mastered):
+       - Runs Early Practice by pulling lowest proficiency words first, then oldest review.
+    Returns: (session_words, is_early_practice, total_due_count)
+    """
+    now = datetime.now(timezone.utc)
+
+    base_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
+        UserProgress.is_in_review == True
+    )
+
+    if lesson_number:
+        base_query = base_query.filter(Word.lesson_number == lesson_number)
+
+    # 1. Count & collect DUE words
+    due_query = base_query.filter(
+        or_(
+            UserProgress.next_review_due.is_(None),
+            UserProgress.next_review_due <= now
+        )
+    )
+    due_count = due_query.count()
+
+    if due_count > 0:
+        # Prioritize: 1) Lowest proficiency (star_rating ASC), 2) Oldest reviewed (nulls first)
+        words = due_query.order_by(
+            UserProgress.star_rating.asc(),
+            UserProgress.last_reviewed_at.asc().nullsfirst()
+        ).limit(session_size).all()
+        return words, False, due_count
+    else:
+        # Early Practice mode: Pull lowest proficiency words first so practice is never empty
+        words = base_query.order_by(
+            UserProgress.star_rating.asc(),
+            UserProgress.last_reviewed_at.asc().nullsfirst()
+        ).limit(session_size).all()
+        return words, True, 0
+
+
 def select_weighted_word(
     db: Session,
     jlpt_level: Optional[str] = None,
@@ -66,10 +127,7 @@ def select_weighted_word(
     only_in_review: bool = True,
     exclude_ids: Optional[List[int]] = None
 ) -> Optional[Word]:
-    """
-    Selects a Word using inverse-weighted random distribution based on its star rating.
-    Only pulls from words added to the review queue if only_in_review=True.
-    """
+    """Fallback single-word weighted selector."""
     query = db.query(Word, UserProgress.star_rating).join(
         UserProgress, Word.id == UserProgress.word_id
     )
@@ -87,19 +145,14 @@ def select_weighted_word(
     if not candidates:
         return None
 
-    # Filter out excluded IDs if sufficient alternatives exist
     if exclude_ids:
         filtered = [c for c in candidates if c[0].id not in exclude_ids]
-        if len(filtered) >= 3:
+        if len(filtered) >= 1:
             candidates = filtered
 
-    # Compute weights based on star ratings
     words = [c[0] for c in candidates]
     weights = [STAR_WEIGHTS.get(c[1], 5.0) for c in candidates]
-
-    # Weighted random sampling
-    chosen = random.choices(words, weights=weights, k=1)[0]
-    return chosen
+    return random.choices(words, weights=weights, k=1)[0]
 
 
 def generate_mcq_options(
@@ -107,11 +160,7 @@ def generate_mcq_options(
     target_word: Word,
     total_options: int = 4
 ) -> List[str]:
-    """
-    Selects 3 plausible distractors and combines with target meaning, shuffled.
-    Prefers distractors from the same part of speech and JLPT level.
-    """
-    # 1. Try to find distractors with the same part of speech and level
+    """Selects 3 plausible distractors and combines with target meaning, shuffled."""
     same_category = db.query(Word.meaning).filter(
         Word.id != target_word.id,
         Word.part_of_speech == target_word.part_of_speech,
@@ -120,7 +169,6 @@ def generate_mcq_options(
 
     distractor_meanings = [row[0] for row in same_category]
 
-    # 2. If not enough, pull from the same JLPT level
     if len(distractor_meanings) < total_options - 1:
         needed = (total_options - 1) - len(distractor_meanings)
         additional = db.query(Word.meaning).filter(
@@ -130,7 +178,6 @@ def generate_mcq_options(
         ).order_by(func.random()).limit(needed).all()
         distractor_meanings.extend([row[0] for row in additional])
 
-    # 3. If still not enough, pull from any word
     if len(distractor_meanings) < total_options - 1:
         needed = (total_options - 1) - len(distractor_meanings)
         fallback = db.query(Word.meaning).filter(

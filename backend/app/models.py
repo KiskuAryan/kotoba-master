@@ -52,6 +52,7 @@ class UserProgress(Base):
     total_attempts = Column(Integer, nullable=False, default=0)
     correct_attempts = Column(Integer, nullable=False, default=0)
     last_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    next_review_due = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
