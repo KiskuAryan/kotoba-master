@@ -1,15 +1,28 @@
+databases:
+  - name: kotoba-postgres
+    databaseName: kotobadb
+    user: kotoba
+    plan: free
+    region: oregon
+
 services:
   - type: web
     name: kotoba-master
     env: python
     plan: free
     region: oregon
-    buildCommand: "pip install -r backend/requirements.txt && PYTHONPATH=backend python backend/app/seed.py"
+    buildCommand: "pip install -r backend/requirements.txt && cd frontend && npm install && npm run build && cd .. && PYTHONPATH=backend python backend/app/seed_themed.py"
     startCommand: "PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8
+      - key: NODE_VERSION
+        value: 20.12.0
       - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL
-        value: sqlite:///kotoba.db
+        fromDatabase:
+          name: kotoba-postgres
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false

@@ -19,3 +19,11 @@ htmlcov/
 .DS_Store
 .vscode/
 .idea/
+
+# Node & Frontend Build
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+*.log
+npm-debug.log*

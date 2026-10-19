@@ -58,16 +58,29 @@ app.include_router(quiz.router, prefix="/api")
 app.include_router(chapters.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 
-# Mount Static Files (CSS, JS, Assets)
-if FRONTEND_DIR.exists():
+FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+FRONTEND_DIST = FRONTEND_DIR / "dist"
+
+# Mount Static Files / Assets
+if FRONTEND_DIST.exists():
+    if (FRONTEND_DIST / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+if (FRONTEND_DIR / "legacy").exists():
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "legacy"), name="static")
+elif FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 @app.get("/", include_in_schema=False)
 def serve_frontend_index():
+    if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
+        return FileResponse(FRONTEND_DIST / "index.html")
+    legacy_index = FRONTEND_DIR / "legacy" / "index.html"
+    if legacy_index.exists():
+        return FileResponse(legacy_index)
     index_file = FRONTEND_DIR / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
-    return {"message": "KotobaMaster API is running. Build frontend/index.html to view the web UI."}
+    return {"message": "KotobaMaster API is running. Build frontend with 'npm run build' to view the web UI."}
 
 @app.get("/health", tags=["Health"])
 def health_check():

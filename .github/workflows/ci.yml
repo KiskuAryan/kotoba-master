@@ -1,0 +1,46 @@
+name: Kotoba Master CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Install Frontend dependencies & Build
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run Pytest Test Suite
+        env:
+          DATABASE_URL: sqlite:///kotoba_test.db
+          JWT_SECRET: test_secret_key_ci_123456789
+        run: |
+          PYTHONPATH=backend pytest backend/tests/ -v

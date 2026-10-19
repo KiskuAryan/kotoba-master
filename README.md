@@ -1,179 +1,252 @@
-# 🌸 KotobaMaster (言葉マスター)
-### *5-Star Spaced Recall Mastery & Vocabulary SRS Engine for JLPT N5 / N4*
+# 🌸 Kotoba Master (言葉マスター)
+### *Next-Generation Japanese JLPT N5 / N4 Spaced-Repetition Platform*
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![SQLite](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](Dockerfile)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite%20%2B%20Tailwind-61DAFB.svg?logo=react&logoColor=black)](https://vitejs.dev/)
+[![Algorithm](https://img.shields.io/badge/Algorithm-SuperMemo%20SM--2-crimson.svg)](#-sm-2-scheduling-engine)
+[![Tests](https://img.shields.io/badge/Tests-33%20Passing-brightgreen.svg)](#-running-the-automated-test-suite)
+[![Docker](https://img.shields.io/badge/Docker-Multi--Stage%20Build-2496ED.svg?logo=docker&logoColor=white)](Dockerfile)
 [![JLPT](https://img.shields.io/badge/Target-JLPT%20N5%20%2F%20N4-ff69b4.svg)](#)
-[![Tests](https://img.shields.io/badge/Tests-15%20Passing-brightgreen.svg)](#)
 
 ---
 
-## 📌 Problem & Motivation
+## 📌 Overview
 
-Preparing for the **Japanese Language Proficiency Test (JLPT N5 and N4)** requires memorizing hundreds of essential kanji, readings, and vocabulary words. Traditional flashcards suffer from two issues:
-1. **Linear repetition fatigue**: Reviewing words you already know wastes valuable study time.
-2. **Binary right/wrong recall**: Standard flashcards do not model confidence or long-term retention decay.
-
-**KotobaMaster** solves this by implementing a **5-Star Spaced Repetition System (SRS)** driven by an **inverse-weighted probability sampling algorithm**:
-* Difficult or new words (⭐ 1 Star) appear frequently in recall quizzes.
-* As you demonstrate consecutive correct recalls, words graduate to higher star ratings (up to ⭐⭐⭐⭐⭐ 5 Stars).
-* Mastered words appear at an exponentially lower frequency, maximizing memory consolidation efficiency.
-
----
-
-## 🏗️ System Architecture
+**Kotoba Master (言葉マスター)** is a Japanese vocabulary learning platform designed for learners tackling **JLPT N5 and N4**. Inspired by AHA Lab's kanji flashcard design, it replaces simple linear quizzes with a **SuperMemo SM-2 Spaced Repetition (SRS) due-date scheduling engine**, an intuitive **1–5 Star visual mastery tier**, and a bespoke Japanese historical design language.
 
 ```
-                                  [ User Browser ]
-                                         │
-                   ┌─────────────────────┴─────────────────────┐
-                   │                                           │
-         [ 🎯 5-Star Recall Quiz ]                  [ 📚 Deck & Analytics ]
-         • Keyboard Shortcuts (1-4)                 • Search & Star Filters
-         • Web Speech API (ja-JP TTS)               • Real-Time Mastery Chart
-                   │                                           │
-                   └─────────────────────┬─────────────────────┘
-                                         │ HTTP REST JSON
-                                         ▼
-                             ┌───────────────────────┐
-                             │    FastAPI Backend    │
-                             └───────────┬───────────┘
-                                         │
-        ┌────────────────────────────────┼────────────────────────────────┐
-        ▼                                ▼                                ▼
-┌───────────────────────┐    ┌───────────────────────┐    ┌───────────────────────┐
-│ 5-Star SRS Algorithm  │    │  SQLAlchemy Relational│    │ ✨ AI Context Engine  │
-│ • Inverse Probability │    │  • Word Models        │    │ • Gemini 1.5 Flash    │
-│ • Dynamic Distractors │    │  • User Progress      │    │ • Furigana & Grammar  │
-│ • Streak Penalties    │    │  • SQLite (WAL Mode)  │    │ • Mnemonic Breakdown  │
-└───────────────────────┘    └───────────────────────┘    └───────────────────────┘
+       Landing (Oda Nobunaga Red & Cream, Live 3D Flip Card)
+                               │
+            ┌──────────────────┴──────────────────┐
+            ▼                                     ▼
+   Instant Guest Mode                    User Registration & Login
+ (0-click trial session)                 (JWT + Password Recovery)
+            └──────────────────┬──────────────────┘
+                               ▼
+        Onboarding (Fumayo Notebook Grid Paper & Mascot)
+         [ Level Select -> Daily Target -> First Deck ]
+                               ▼
+            Dashboard (Due Queue, Streak, 5★ Breakdown)
+                               ▼
+     Calm Review Session (3D Card Flip, 4 SM-2 Ratings, Audio)
+                               ▼
+       Session Summary (Oda Nobunaga Victory Banner + Confetti)
 ```
 
 ---
 
-## 📐 Mathematical Model: 5-Star Spaced Recall Engine
+## ✨ Key Features
 
-### 1. Inverse-Weighted Sampling
-When fetching the next quiz question, each word's appearance probability $P(w)$ is weighted inversely to its mastery level:
+### 🧠 1. Due-Date Spaced Repetition (SuperMemo SM-2)
+- Replaces weighted random quizzes with calculated **due-date intervals**.
+- Four performance ratings per card:
+  - **Again (1)**: Reset interval to 1 day, penalty on ease factor (-0.20).
+  - **Hard (2)**: 1.2× interval multiplier, slight ease reduction (-0.15).
+  - **Good (3)**: Optimal SM-2 interval progression (1d $\rightarrow$ 6d $\rightarrow$ $I \times EF$).
+  - **Easy (4)**: Accelerated interval ($1.3 \times$ bonus, +0.15 ease factor).
+- **Periodic Mastered Reinforcement**: Mastered 4★ and 5★ words occasionally interleave into current review decks to guarantee lifetime retention without recall fade.
 
-$$\text{Weight}(s) = \begin{cases} 
-10.0 & \text{if } s = 1\star \text{ (Unfamiliar / High Priority)} \\
-6.0 & \text{if } s = 2\star \text{ (Learning)} \\
-3.0 & \text{if } s = 3\star \text{ (Familiar)} \\
-1.0 & \text{if } s = 4\star \text{ (Strong)} \\
-0.2 & \text{if } s = 5\star \text{ (Mastered / Rare Retention Check)}
-\end{cases}$$
+### ⭐ 2. 5-Star Visual Mastery System
+- Transparent proficiency tiers mapped to calculated memory intervals:
+  - **1★ (New / Learning)**: Repetition interval $< 1$ day
+  - **2★ (Early Recall)**: Repetition interval 1–4 days
+  - **3★ (Solidifying)**: Repetition interval 5–14 days
+  - **4★ (Strong Retention)**: Repetition interval 15–30 days
+  - **5★ (Mastered)**: Repetition interval $> 30$ days
 
-### 2. Graduation & Penalty Transitions
-* **Correct Recall**: Increments the word's streak. When the threshold is met, the word graduates:
-  * $1\star \rightarrow 2\star$: Requires 1 correct recall
-  * $2\star \rightarrow 3\star$: Requires 2 consecutive recalls
-  * $3\star \rightarrow 4\star$: Requires 4 consecutive recalls
-  * $4\star \rightarrow 5\star$: Requires 6 consecutive recalls
-* **Incorrect Recall**: Resets streak to 0 and incurs an immediate demotion penalty:
-  * $5\star \rightarrow 3\star$ ($-2$ penalty; requires quick re-review)
-  * $4\star \rightarrow 2\star$ ($-2$ penalty)
-  * $3\star, 2\star \rightarrow 1\star$ ($-1$ penalty)
+### 🎌 3. Oda Nobunaga & Japanese Design System
+- **Landing & Victory Summary**: Bold Oda Nobunaga aesthetic with crimson red (`#D8003A`), aged cream (`#F3EBDD`), giant condensed display typography (*Anton* / *Dela Gothic One*), thin framed panels, and vertical kanji callouts.
+- **Deck Library**: Opaque-style pastel cards with custom illustrated theme icons.
+- **Onboarding & Empty States**: Fumayo-style notebook grid paper, mascot guidance, and sticker badges.
+- **Calm Review Screen**: Clean, distraction-free card review featuring huge Japanese kanji (*Noto Serif JP*), star-coded color bands, paper textures, smooth 3D CSS flip animations, and bottom-anchored controls for one-handed mobile review.
+
+### 🎧 4. Integrated Audio & AI Mnemonics
+- **Native Pronunciation**: Integrated Japanese Text-to-Speech via Web Speech API (`ja-JP`).
+- **Gemini AI Mnemonics & Sentences**: On-demand and pre-cached contextual example sentences and mnemonic breakdowns via Google Gemini 1.5, with server-side caching and rate limiting.
+
+### 📊 5. Comprehensive Analytics & Data Portability
+- **365-Day Activity Heatmap**: Visual log of daily review volume.
+- **30-Day Accuracy Trend**: Tracks proportion of successful recall without resets.
+- **14-Day Due Forecast**: Previews upcoming review load scheduled by SM-2.
+- **JSON Data Portability**: 1-click full JSON export and restore of study history.
 
 ---
 
-## 🗄️ Relational Database Schema
+## 🗄️ Database Architecture
+
+Supports **SQLite with WAL mode** for fast zero-config local development, and **PostgreSQL** with connection pooling (`pool_pre_ping=True`, `pool_size=10`) for production environments.
 
 ```mermaid
 erDiagram
-    WORDS ||--o| USER_PROGRESS : tracks
-    WORDS ||--o{ QUIZ_LOGS : records
+    USERS ||--o{ USER_SETTINGS : configures
+    USERS ||--o{ USER_PROGRESS : tracks
+    USERS ||--o{ REVIEW_LOGS : records
+    DECKS ||--o{ WORDS : contains
+    WORDS ||--o{ USER_PROGRESS : evaluates
+    WORDS ||--o{ REVIEW_LOGS : logs
+
+    USERS {
+        int id PK
+        string username
+        string email
+        string hashed_password
+        boolean is_guest
+        int streak_days
+    }
+
+    DECKS {
+        int id PK
+        string title
+        string japanese_title
+        string level "N5 or N4"
+        string icon
+        string description
+    }
 
     WORDS {
         int id PK
+        int deck_id FK
         string kanji
         string kana
         string romaji
         string meaning
-        string jlpt_level "N5 or N4"
-        string part_of_speech "verb, noun, adj, adv"
-        text example_ja
-        text example_en
+        string mnemonic
+        text example_sentence
+        text example_translation
     }
 
     USER_PROGRESS {
         int id PK
-        int word_id FK "CASCADE DELETE"
+        int user_id FK
+        int word_id FK
         int star_rating "1 to 5"
-        int correct_streak
-        int total_attempts
-        int correct_attempts
+        int repetitions
+        float interval_days
+        float ease_factor
+        datetime next_review_due
         datetime last_reviewed_at
-        datetime updated_at
+        text user_notes
     }
 
-    QUIZ_LOGS {
+    REVIEW_LOGS {
         int id PK
-        int word_id FK "CASCADE DELETE"
-        string selected_meaning
-        boolean is_correct
-        int star_rating_before
-        int star_rating_after
-        datetime answered_at
+        int user_id FK
+        int word_id FK
+        string rating "again, hard, good, easy"
+        int response_time_ms
+        datetime reviewed_at
     }
 ```
 
 ---
 
-## 🚀 Quickstart & Setup
+## 🚀 Quickstart Guide
 
-### Option 1: Local Development (Python 3.11+)
+### 1. Local Development (Backend + Frontend)
 
+#### Prerequisites
+- Python 3.11+
+- Node.js 18+ and npm
+
+#### Backend Setup
 ```bash
-# 1. Clone repository & enter project directory
+# Clone the repository
+git clone https://github.com/KiskuAryan/kotoba-master.git
 cd kotoba-master
 
-# 2. Create and activate virtual environment
+# Create and activate virtual environment
 python3 -m venv backend/venv
 source backend/venv/bin/activate
 
-# 3. Install dependencies
+# Install dependencies
 pip install -r backend/requirements.txt
 
-# 4. Start FastAPI server (tables & 50 JLPT seed words auto-initialize)
+# Start backend server (auto-seeds 14 themed decks)
 PYTHONPATH=backend uvicorn app.main:app --reload --port 8000
 ```
-Open **[http://localhost:8000](http://localhost:8000)** in your browser.
+
+#### Frontend Setup (Vite + React)
+```bash
+# In a separate terminal:
+cd frontend
+npm install
+npm run dev
+```
+Open **[http://localhost:5173](http://localhost:5173)** (or **[http://localhost:8000](http://localhost:8000)** when building for production).
 
 ---
 
-### Option 2: Docker & Docker Compose
+### 2. Building for Production
 
 ```bash
-# Build and run containerized service
-docker-compose up --build
+# Build React frontend
+cd frontend
+npm run build
+cd ..
+
+# FastAPI automatically serves frontend/dist at root /
+PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
-Access the application at **[http://localhost:8000](http://localhost:8000)**.
 
 ---
 
-## 🧪 Running the Automated Test Suite
+### 3. Docker Deployment
+
+```bash
+# Build and run the self-contained multi-stage container
+docker build -t kotoba-master .
+docker run -p 8000:8000 -e JWT_SECRET=your_secret_key kotoba-master
+```
+
+---
+
+### 4. Deploying to Render with PostgreSQL
+
+The project includes an infrastructure-as-code blueprint in [`render.yaml`](render.yaml):
+
+1. Push your repository to GitHub.
+2. In the [Render Dashboard](https://dashboard.render.com), select **New > Blueprint**.
+3. Connect your `kotoba-master` repository.
+4. Render automatically provisions:
+   - **PostgreSQL Database** (`kotoba-postgres`, free tier)
+   - **Web Service** with Python 3.11 & Node 20 runtime
+   - Automated environment variable wiring (`DATABASE_URL`, `JWT_SECRET`)
+5. Optional: Add `GEMINI_API_KEY` in Render environment settings for live sentence generation.
+
+---
+
+## 🧪 Automated Pytest Suite
+
+Kotoba Master includes comprehensive unit and integration tests covering scheduling mathematics, JWT authentication, guest mode, deck progression, and API routing.
 
 ```bash
 PYTHONPATH=backend pytest backend/tests/ -v
 ```
 
-**Test Coverage Highlights:**
-* `test_database.py`: Model relationships, SQLite WAL pragmas, check constraints, cascade deletes, and idempotent seeding.
-* `test_algorithm.py`: Probability weight distributions, streak graduation, and mistake penalty logic.
-* `test_api.py`: FastAPI endpoints, static frontend delivery, quiz submission flow, and deck analytics.
+```
+backend/tests/test_algorithm.py .....                                    [ 15%]
+backend/tests/test_api.py ........                                       [ 39%]
+backend/tests/test_auth.py .....                                         [ 54%]
+backend/tests/test_database.py ...                                       [ 63%]
+backend/tests/test_new_api_endpoints.py ......                           [ 81%]
+backend/tests/test_sm2_scheduling.py ......                              [100%]
+
+======================== 33 passed in 5.09s =========================
+```
 
 ---
 
-## 🎯 Global Innovation Consulting (GIC) Skill Alignment
+## ⌨️ Keyboard Shortcuts (Review Screen)
 
-| GIC Skill Tag | How KotobaMaster Demonstrates It |
-| :--- | :--- |
-| **Database Design** | Relational schema in SQLite/PostgreSQL with foreign key cascade actions, check constraints, and indexed lookups. |
-| **Application Development** | Full-stack FastAPI web app with asynchronous endpoints, Pydantic schemas, and interactive single-page UI. |
-| **Algorithm & Logic** | Non-trivial mathematical modeling of memory retention via inverse-weighted random distributions. |
-| **AI Integration** | Google Gemini 1.5 Flash endpoint generating natural conversational Japanese examples and mnemonics. |
-| **Cloud & DevOps** | Multi-stage Docker image, Docker Compose service, and GitHub Actions CI workflow. |
-| **Japanese Language (JLPT)** | Authentic focus on Japanese N5/N4 vocabulary, Japanese pitch audio (TTS), and business communication readiness. |
+| Key | Action |
+| :---: | :--- |
+| `Space` | Flip card to reveal readings, meaning, sentence & mnemonic |
+| `1` | Rate card as **Again** (< 1 day) |
+| `2` | Rate card as **Hard** |
+| `3` | Rate card as **Good** (optimal SM-2 progression) |
+| `4` | Rate card as **Easy** (bonus interval multiplier) |
+
+---
+
+## 📄 License
+MIT License. Created for Japanese language students worldwide.
