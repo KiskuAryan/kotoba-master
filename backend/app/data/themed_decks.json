@@ -1,0 +1,142 @@
+[
+  {
+    "slug": "n5-daily-essentials",
+    "name": "Daily Essentials & Greetings",
+    "name_ja": "日常会話・挨拶",
+    "description": "Fundamental everyday phrases, greetings, and indispensable conversational words.",
+    "icon": "🌸",
+    "color": "#FEE2E2",
+    "jlpt_level": "N5",
+    "sort_order": 1
+  },
+  {
+    "slug": "n5-numbers-time",
+    "name": "Numbers, Time & Calendar",
+    "name_ja": "数字・時間・日付",
+    "description": "Essential time expressions, days of the week, months, and counting units.",
+    "icon": "⏰",
+    "color": "#FEF3C7",
+    "jlpt_level": "N5",
+    "sort_order": 2
+  },
+  {
+    "slug": "n5-food-dining",
+    "name": "Food, Dining & Kitchen",
+    "name_ja": "食べ物・料理・外食",
+    "description": "Japanese culinary vocabulary, dining out, and kitchen essentials.",
+    "icon": "🍙",
+    "color": "#DCFCE7",
+    "jlpt_level": "N5",
+    "sort_order": 3
+  },
+  {
+    "slug": "n5-travel-transit",
+    "name": "Travel, Transit & Places",
+    "name_ja": "旅行・交通・場所",
+    "description": "Navigating stations, trains, directions, and popular city destinations.",
+    "icon": "🚅",
+    "color": "#E0F2FE",
+    "jlpt_level": "N5",
+    "sort_order": 4
+  },
+  {
+    "slug": "n5-people-family",
+    "name": "People, Family & Occupations",
+    "name_ja": "人・家族・仕事",
+    "description": "Terms for family members, relationships, titles, and common careers.",
+    "icon": "👥",
+    "color": "#F3E8FF",
+    "jlpt_level": "N5",
+    "sort_order": 5
+  },
+  {
+    "slug": "n5-action-verbs",
+    "name": "Core Action Verbs",
+    "name_ja": "基本動作・必須動詞",
+    "description": "High-frequency daily verbs that form the foundation of Japanese sentence structure.",
+    "icon": "⚡",
+    "color": "#FFEDD5",
+    "jlpt_level": "N5",
+    "sort_order": 6
+  },
+  {
+    "slug": "n5-adjectives",
+    "name": "Essential Adjectives",
+    "name_ja": "基本形容詞 (い・な)",
+    "description": "Key descriptive adjectives for expressing feelings, tastes, sizes, and states.",
+    "icon": "🎨",
+    "color": "#CCFBF1",
+    "jlpt_level": "N5",
+    "sort_order": 7
+  },
+  {
+    "slug": "n5-home-objects",
+    "name": "Home & Everyday Objects",
+    "name_ja": "生活用品・家・家具",
+    "description": "Familiar items found around the house, bedroom, and study room.",
+    "icon": "🏠",
+    "color": "#F1F5F9",
+    "jlpt_level": "N5",
+    "sort_order": 8
+  },
+  {
+    "slug": "n4-work-tech",
+    "name": "Work, Office & Modern Tech",
+    "name_ja": "職場・IT・ビジネス",
+    "description": "Professional workspace vocabulary, meetings, devices, and communication.",
+    "icon": "💼",
+    "color": "#DBEAFE",
+    "jlpt_level": "N4",
+    "sort_order": 9
+  },
+  {
+    "slug": "n4-emotions-sensations",
+    "name": "Emotions, Health & Sensations",
+    "name_ja": "感情・体調・健康",
+    "description": "Expressing subtle feelings, physical conditions, illnesses, and doctors' visits.",
+    "icon": "❤️",
+    "color": "#FFE4E6",
+    "jlpt_level": "N4",
+    "sort_order": 10
+  },
+  {
+    "slug": "n4-nature-weather",
+    "name": "Nature, Weather & Seasons",
+    "name_ja": "自然・天気・季節",
+    "description": "Meteorological phenomena, changing seasons, climate, and geography.",
+    "icon": "🌿",
+    "color": "#D1FAE5",
+    "jlpt_level": "N4",
+    "sort_order": 11
+  },
+  {
+    "slug": "n4-advanced-verbs",
+    "name": "Intermediate Action Verbs",
+    "name_ja": "中級動詞・授受動詞",
+    "description": "Nuanced transitive/intransitive verbs and verbs of giving and receiving favors.",
+    "icon": "🔥",
+    "color": "#FED7AA",
+    "jlpt_level": "N4",
+    "sort_order": 12
+  },
+  {
+    "slug": "n4-society-culture",
+    "name": "Society, Media & Daily Life",
+    "name_ja": "社会・生活・文化",
+    "description": "Rules, social events, news, holidays, and cultural traditions.",
+    "icon": "📰",
+    "color": "#E2E8F0",
+    "jlpt_level": "N4",
+    "sort_order": 13
+  },
+  {
+    "slug": "n4-connectors-adverbs",
+    "name": "Connectors & Sentence Modifiers",
+    "name_ja": "接続詞・副詞・表現",
+    "description": "Crucial conjunctions and adverbs that connect thoughts logically.",
+    "icon": "🧩",
+    "color": "#FDF4FF",
+    "jlpt_level": "N4",
+    "sort_order": 14
+  }
+]

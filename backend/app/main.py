@@ -7,8 +7,9 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.database import engine, SessionLocal, Base
 from app.seed import init_db, seed_vocab, seed_chapters
+from app.seed_themed import seed_database
 from app.auth import ensure_demo_user
-from app.routes import quiz, decks, words, ai, chapters, auth
+from app.routes import quiz, decks, words, ai, chapters, auth, reviews, stats, settings as settings_route
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 
@@ -16,6 +17,10 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 async def lifespan(app: FastAPI):
     # Startup: ensure tables exist, demo user, chapters seeded, and initial vocabulary seeded
     init_db()
+    try:
+        seed_database()
+    except Exception as e:
+        print(f"Warning during seed: {e}")
     db = SessionLocal()
     try:
         ensure_demo_user(db)
@@ -44,10 +49,13 @@ app.add_middleware(
 
 # Include API Routers
 app.include_router(auth.router, prefix="/api")
-app.include_router(quiz.router, prefix="/api")
-app.include_router(chapters.router, prefix="/api")
 app.include_router(decks.router, prefix="/api")
 app.include_router(words.router, prefix="/api")
+app.include_router(reviews.router, prefix="/api")
+app.include_router(stats.router, prefix="/api")
+app.include_router(settings_route.router, prefix="/api")
+app.include_router(quiz.router, prefix="/api")
+app.include_router(chapters.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 
 # Mount Static Files (CSS, JS, Assets)

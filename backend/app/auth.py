@@ -8,6 +8,9 @@ from app.config import settings
 from app.database import get_db
 from app.models import User, ChapterProgress
 
+import secrets
+from app.models import User, UserSettings, ChapterProgress
+
 def hash_password(password: str) -> str:
     """Hash password using bcrypt."""
     salt = bcrypt.gensalt(rounds=12)
@@ -35,6 +38,30 @@ def decode_access_token(token: str) -> Optional[dict]:
     except (jwt.PyJWTError, Exception):
         return None
 
+def create_guest_user(db: Session) -> User:
+    """Creates a new anonymous guest user with isolated progress."""
+    uid = secrets.token_hex(4)
+    username = f"guest_{uid}"
+    email = f"{username}@guest.kotobamaster.com"
+    pwd = secrets.token_urlsafe(16)
+
+    user = User(
+        username=username,
+        email=email,
+        hashed_password=hash_password(pwd),
+        is_guest=True,
+        is_verified=True
+    )
+    db.add(user)
+    db.flush()
+
+    # Create default settings
+    user_settings = UserSettings(user_id=user.id, daily_goal=20, furigana_mode="always")
+    db.add(user_settings)
+    db.commit()
+    db.refresh(user)
+    return user
+
 def ensure_demo_user(db: Session) -> User:
     """Returns or creates the default demo user (user_id=1)."""
     user = db.query(User).filter(User.id == 1).first()
@@ -44,9 +71,12 @@ def ensure_demo_user(db: Session) -> User:
             username="demo",
             email="demo@kotobamaster.com",
             hashed_password=hash_password("demo1234"),
+            is_guest=False,
             is_verified=True
         )
         db.add(user)
+        db.flush()
+        db.add(UserSettings(user_id=1, daily_goal=20))
         db.commit()
         db.refresh(user)
     return user

@@ -1,76 +1,177 @@
 import random
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from app.models import Word, UserProgress
 
-# Inverse weighting table
-STAR_WEIGHTS = {
-    1: 10.0,
-    2: 6.0,
-    3: 3.0,
-    4: 1.0,
-    5: 0.2
-}
+# ==================== SM-2 SPACED REPETITION ENGINE ====================
 
-# Consecutive correct recalls needed to graduate to next star
-STREAK_REQUIREMENTS = {
+RATING_GRADES = {
+    "again": 1,
+    "hard": 2,
+    "good": 3,
+    "easy": 4,
     1: 1,
     2: 2,
-    3: 4,
-    4: 6,
-    5: 8
+    3: 3,
+    4: 4
 }
 
-# Spaced Review Intervals (in minutes) based on AHA Lab SRS model
-STAR_INTERVALS_MINUTES = {
-    1: 10,       # 1 Star: 10 mins (unfamiliar / struggling)
-    2: 120,      # 2 Stars: 2 hours
-    3: 1440,     # 3 Stars: 24 hours (1 day)
-    4: 4320,     # 4 Stars: 3 days
-    5: 10080     # 5 Stars: 7 days
-}
+def derive_star_rating(interval_days: float, repetitions: int) -> int:
+    """
+    Derives the visible 1-5 star mastery level from the SM-2 interval and repetition count.
+    - 1★ (Unfamiliar): Not yet learned or failed (reps == 0 or interval < 1 day)
+    - 2★ (Learning): Short-term memory (interval 1 to 4 days)
+    - 3★ (Familiar): Medium-term retention (interval 5 to 14 days)
+    - 4★ (Proficient): Strong retention (interval 15 to 30 days)
+    - 5★ (Mastered): Long-term mastery (interval > 30 days)
+    """
+    if repetitions == 0 or interval_days < 1.0:
+        return 1
+    elif interval_days < 5.0:
+        return 2
+    elif interval_days < 15.0:
+        return 3
+    elif interval_days <= 30.0:
+        return 4
+    else:
+        return 5
+
+
+def calculate_sm2_schedule(
+    rating: str | int,
+    current_reps: int = 0,
+    current_interval: float = 0.0,
+    current_ease: float = 2.5,
+    current_streak: int = 0
+) -> Dict[str, Any]:
+    """
+    Calculates the next SM-2 interval, ease factor, repetition count, and derived star level.
+    Ratings:
+      - 'again' (1): Fail. Reset repetitions to 0, interval to 1 day, reduce ease factor.
+      - 'hard'  (2): Pass with difficulty. Advance reps, conservative interval multiplier (1.2x), ease -= 0.15.
+      - 'good'  (3): Standard success. Standard SM-2 interval growth, ease maintained.
+      - 'easy'  (4): Effortless recall. Aggressive interval bonus (1.3x), ease += 0.15.
+    """
+    grade = RATING_GRADES.get(rating, 3)
+
+    ease = max(1.3, float(current_ease))
+    reps = int(current_reps)
+    interval = float(current_interval)
+    streak = int(current_streak)
+    is_correct = grade > 1
+
+    if grade == 1:  # Again / Fail
+        reps = 0
+        interval = 1.0
+        ease = max(1.3, round(ease - 0.20, 2))
+        streak = 0
+    elif grade == 2:  # Hard / Difficult pass
+        if reps == 0:
+            interval = 1.0
+        else:
+            interval = max(1.0, round(interval * 1.2, 1))
+        reps += 1
+        ease = max(1.3, round(ease - 0.15, 2))
+        streak += 1
+    elif grade == 3:  # Good / Standard pass
+        if reps == 0:
+            interval = 1.0
+        elif reps == 1:
+            interval = 6.0
+        else:
+            interval = max(1.0, round(interval * ease, 1))
+        reps += 1
+        streak += 1
+    elif grade == 4:  # Easy / Perfect pass
+        if reps == 0:
+            interval = 2.0
+        elif reps == 1:
+            interval = 7.0
+        else:
+            interval = max(1.0, round(interval * ease * 1.3, 1))
+        reps += 1
+        ease = min(3.5, round(ease + 0.15, 2))
+        streak += 1
+
+    star_rating = derive_star_rating(interval, reps)
+    now = datetime.now(timezone.utc)
+    next_due = now + timedelta(days=interval)
+
+    return {
+        "grade": grade,
+        "is_correct": is_correct,
+        "repetitions": reps,
+        "interval_days": interval,
+        "ease_factor": ease,
+        "streak": streak,
+        "star_rating": star_rating,
+        "next_review_due": next_due
+    }
+
+
+def get_due_words_for_user(
+    db: Session,
+    user_id: int,
+    deck_id: Optional[int] = None,
+    limit: int = 20
+) -> List[Tuple[Word, UserProgress]]:
+    """
+    Returns vocabulary items due for review according to SM-2 due dates.
+    Prioritizes overdue cards, then items without scheduled due dates.
+    """
+    now = datetime.now(timezone.utc)
+    query = db.query(Word, UserProgress).join(
+        UserProgress,
+        (Word.id == UserProgress.word_id) & (UserProgress.user_id == user_id)
+    ).filter(
+        UserProgress.is_in_review == True,
+        or_(
+            UserProgress.next_review_due == None,
+            UserProgress.next_review_due <= now
+        )
+    )
+
+    if deck_id is not None:
+        query = query.filter(Word.deck_id == deck_id)
+
+    # Order by: never reviewed first (None), then oldest due date (most overdue)
+    query = query.order_by(
+        UserProgress.next_review_due.asc().nullsfirst()
+    ).limit(limit)
+
+    return query.all()
+
+
+# ==================== BACKWARD COMPATIBILITY HELPERS ====================
+STAR_WEIGHTS = {1: 10.0, 2: 6.0, 3: 3.0, 4: 1.0, 5: 0.2}
+STREAK_REQUIREMENTS = {1: 1, 2: 2, 3: 4, 4: 6, 5: 8}
+STAR_INTERVALS_MINUTES = {1: 10, 2: 120, 3: 1440, 4: 4320, 5: 10080}
 
 def get_next_review_due_time(star_rating: int, is_correct: bool) -> datetime:
-    """Computes the timestamp when the word should next appear for review."""
     now = datetime.now(timezone.utc)
     if is_correct:
         mins = STAR_INTERVALS_MINUTES.get(star_rating, 60)
         return now + timedelta(minutes=mins)
-    else:
-        # Mistakes reappear in 5 minutes for quick reinforcement
-        return now + timedelta(minutes=5)
+    return now + timedelta(minutes=5)
 
-def update_mastery_rating(
-    current_stars: int,
-    current_streak: int,
-    is_correct: bool
-) -> Tuple[int, int, int]:
-    """Computes new star rating and streak."""
+def update_mastery_rating(current_stars: int, current_streak: int, is_correct: bool) -> Tuple[int, int, int]:
     if is_correct:
         new_streak = current_streak + 1
         new_stars = current_stars
-        
         if current_stars < 5:
             required = STREAK_REQUIREMENTS.get(current_stars, 2)
             if new_streak >= required:
                 new_stars = current_stars + 1
-
-        star_change = new_stars - current_stars
-        return new_stars, new_streak, star_change
+        return new_stars, new_streak, (new_stars - current_stars)
     else:
         new_streak = 0
         if current_stars >= 4:
             new_stars = current_stars - 2
-        elif current_stars > 1:
-            new_stars = current_stars - 1
         else:
-            new_stars = 1
-
-        star_change = new_stars - current_stars
-        return new_stars, new_streak, star_change
-
+            new_stars = max(1, current_stars - 1)
+        return new_stars, 0, (new_stars - current_stars)
 
 def build_review_session(
     db: Session,
@@ -79,27 +180,11 @@ def build_review_session(
     include_retention_interleaving: bool = True,
     user_id: Optional[int] = None
 ) -> Tuple[List[Word], bool, int]:
-    """
-    Constructs a finite review batch (AHA Lab style with cumulative interleaving):
-    1. If lesson_number is specified (e.g. Lesson 4, Lesson 16):
-       - Focus slots (~75% of batch) come from the target lesson (due words first, then early practice).
-       - Retention slots (~25% of batch) are sampled from previous chapters (< lesson_number)
-         favoring old mastered/near-mastered words (stars >= 3, or oldest reviewed) to ensure
-         long-term retention and prevent decay.
-    2. If lesson_number is None (All Active Lessons):
-       - Combines due / lower-proficiency words (~75%) with periodic retention checks
-         from higher-star words (~25%) so mastered words are periodically refreshed.
-    3. Each word appears strictly ONCE per session (no duplicates).
-    4. Words are shuffled so retention checks are naturally interleaved throughout the quiz.
-    5. Scoped to user_id if provided.
-    Returns: (session_words, is_early_practice, total_due_count)
-    """
     now = datetime.now(timezone.utc)
     selected_ids = set()
     primary_words: List[Word] = []
     retention_words: List[Word] = []
 
-    # Calculate overall due count for the user's current scope
     base_scope = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
         UserProgress.is_in_review == True
     )
@@ -116,7 +201,6 @@ def build_review_session(
             or_(UserProgress.next_review_due.is_(None), UserProgress.next_review_due <= now)
         ).count()
 
-    # Determine retention target count (approx 20-30% of session)
     retention_target = 0
     if include_retention_interleaving:
         if lesson_number and lesson_number > 1:
@@ -124,7 +208,6 @@ def build_review_session(
         elif lesson_number is None:
             retention_target = max(1, round(session_size * 0.25))
 
-    # --- Phase 1: Sample Interleaved Retention Words (from older chapters or high mastery) ---
     if retention_target > 0:
         if lesson_number and lesson_number > 1:
             prev_scope = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
@@ -132,7 +215,6 @@ def build_review_session(
                 Word.lesson_number < lesson_number
             )
         else:
-            # All chapters scope: sample near-mastered words (star_rating >= 3)
             prev_scope = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
                 UserProgress.is_in_review == True,
                 UserProgress.star_rating >= 3
@@ -141,7 +223,6 @@ def build_review_session(
         if user_id:
             prev_scope = prev_scope.filter(UserProgress.user_id == user_id)
 
-        # 1a. Prioritize older words that are DUE first (star >= 3)
         due_retention = prev_scope.filter(
             UserProgress.star_rating >= 3,
             or_(UserProgress.next_review_due.is_(None), UserProgress.next_review_due <= now)
@@ -155,7 +236,6 @@ def build_review_session(
             retention_words.append(w)
             selected_ids.add(w.id)
 
-        # 1b. If slots remain, sample non-due near-mastered words (oldest reviewed first)
         if len(retention_words) < retention_target:
             needed = retention_target - len(retention_words)
             query_non_due = prev_scope.filter(UserProgress.star_rating >= 3)
@@ -171,23 +251,6 @@ def build_review_session(
                 retention_words.append(w)
                 selected_ids.add(w.id)
 
-        # 1c. If still needed and lesson_number > 1, allow any older chapter words (stars >= 1)
-        if len(retention_words) < retention_target and lesson_number and lesson_number > 1:
-            needed = retention_target - len(retention_words)
-            query_any_older = prev_scope
-            if selected_ids:
-                query_any_older = query_any_older.filter(~Word.id.in_(selected_ids))
-            any_older = query_any_older.order_by(
-                UserProgress.star_rating.desc(),
-                UserProgress.last_reviewed_at.asc().nullsfirst()
-            ).limit(needed).all()
-
-            for w in any_older:
-                setattr(w, "is_retention_check", True)
-                retention_words.append(w)
-                selected_ids.add(w.id)
-
-    # --- Phase 2: Sample Primary Focus Words ---
     primary_needed = session_size - len(retention_words)
     primary_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
         UserProgress.is_in_review == True
@@ -199,7 +262,6 @@ def build_review_session(
     if selected_ids:
         primary_query = primary_query.filter(~Word.id.in_(selected_ids))
 
-    # 2a. Due primary words (lowest star proficiency first, oldest reviewed first)
     due_primary = primary_query.filter(
         or_(UserProgress.next_review_due.is_(None), UserProgress.next_review_due <= now)
     ).order_by(
@@ -212,7 +274,6 @@ def build_review_session(
         primary_words.append(w)
         selected_ids.add(w.id)
 
-    # 2b. If not enough due words, pull Early Practice words from target scope
     if len(primary_words) < primary_needed:
         needed = primary_needed - len(primary_words)
         early_query = primary_query
@@ -228,7 +289,6 @@ def build_review_session(
             primary_words.append(w)
             selected_ids.add(w.id)
 
-    # 2c. If target lesson has fewer words than needed, top up from ANY active review words
     if (len(primary_words) + len(retention_words)) < session_size:
         needed = session_size - (len(primary_words) + len(retention_words))
         topup_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
@@ -257,12 +317,8 @@ def build_review_session(
         return [], False, 0
 
     is_early_practice = (scope_due_count == 0)
-
-    # Shuffle to interleave retention checks naturally throughout the session batch
     random.shuffle(total_words)
-
     return total_words, is_early_practice, scope_due_count
-
 
 def select_weighted_word(
     db: Session,
@@ -272,20 +328,15 @@ def select_weighted_word(
     exclude_ids: Optional[List[int]] = None,
     user_id: Optional[int] = None
 ) -> Optional[Word]:
-    """Fallback single-word weighted selector."""
     query = db.query(Word, UserProgress.star_rating).join(
         UserProgress, Word.id == UserProgress.word_id
     )
-
     if user_id:
         query = query.filter(UserProgress.user_id == user_id)
-
     if only_in_review:
         query = query.filter(UserProgress.is_in_review == True)
-
     if lesson_number:
         query = query.filter(Word.lesson_number == lesson_number)
-
     if jlpt_level:
         query = query.filter(Word.jlpt_level == jlpt_level)
 
@@ -302,13 +353,11 @@ def select_weighted_word(
     weights = [STAR_WEIGHTS.get(c[1], 5.0) for c in candidates]
     return random.choices(words, weights=weights, k=1)[0]
 
-
 def generate_mcq_options(
     db: Session,
     target_word: Word,
     total_options: int = 4
 ) -> List[str]:
-    """Selects 3 plausible distractors and combines with target meaning, shuffled."""
     same_category = db.query(Word.meaning).filter(
         Word.id != target_word.id,
         Word.part_of_speech == target_word.part_of_speech,

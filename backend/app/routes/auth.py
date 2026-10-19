@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db
-from app.models import User, ChapterProgress
+from app.models import User, UserSettings, ChapterProgress
 from app.schemas import (
     UserRegister,
     UserLogin,
@@ -78,6 +78,11 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)):
         is_verified=False
     )
     db.add(user)
+    db.flush()
+
+    # Create default user settings
+    user_settings = UserSettings(user_id=user.id, daily_goal=20, furigana_mode="always")
+    db.add(user_settings)
     db.commit()
     db.refresh(user)
 
@@ -95,6 +100,23 @@ def register_user(payload: UserRegister, db: Session = Depends(get_db)):
         access_token=token,
         token_type="bearer",
         user=UserOut.model_validate(user)
+    )
+
+
+@router.post("/guest", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def login_as_guest(db: Session = Depends(get_db)):
+    """
+    Creates an anonymous guest session with isolated progress and full study capabilities.
+    Users can instantly study without a signup barrier.
+    """
+    from app.auth import create_guest_user
+    guest = create_guest_user(db)
+    init_user_chapters(db, guest.id)
+    token = create_access_token(guest.id, guest.username)
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        user=UserOut.model_validate(guest)
     )
 
 

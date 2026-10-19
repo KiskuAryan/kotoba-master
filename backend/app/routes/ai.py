@@ -53,13 +53,30 @@ OFFLINE_SENTENCE_CACHE = {
     }
 }
 
+# In-memory explanation cache (persists between requests)
+AI_EXPLANATION_CACHE = dict(OFFLINE_SENTENCE_CACHE)
+LAST_REQUEST_TIMES = {}
+
 @router.post("/explain", response_model=SentenceExplanationResponse)
 def generate_ai_explanation(payload: SentencePromptRequest):
     """
     Generates contextual Japanese sentence, grammar breakdown, and mnemonic.
-    Uses Gemini API if GEMINI_API_KEY is configured in the environment,
-    otherwise uses an intelligent zero-latency rule-based fallback.
+    Results are cached per word. Rate-limited with intelligent zero-latency rule-based fallback.
     """
+    cache_key = payload.word.strip()
+
+    # Check cache first
+    if cache_key in AI_EXPLANATION_CACHE:
+        cached = AI_EXPLANATION_CACHE[cache_key]
+        return SentenceExplanationResponse(
+            japanese_sentence=cached.get("sentence") or cached.get("japanese_sentence"),
+            romaji=cached.get("romaji", ""),
+            english_translation=cached.get("translation") or cached.get("english_translation"),
+            grammar_breakdown=cached.get("grammar") or cached.get("grammar_breakdown"),
+            mnemonic=cached.get("mnemonic", ""),
+            source="cache"
+        )
+
     gemini_key = os.getenv("GEMINI_API_KEY")
 
     if gemini_key:

@@ -7,12 +7,16 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 class Settings:
     PROJECT_NAME: str = "KotobaMaster"
     PROJECT_VERSION: str = "1.0.0"
-    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/kotoba.db")
+    raw_db_url = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/kotoba.db")
+    if raw_db_url.startswith("postgres://"):
+        raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL: str = raw_db_url
     SEED_FILE: Path = DATA_DIR / "minna_vocab.json"
     CORS_ORIGINS: list = ["*"]
     JWT_SECRET: str = os.getenv("JWT_SECRET", "kotoba-master-super-secret-jwt-key-change-in-production-32chars")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_DAYS: int = 30
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
     # Email / SMTP Settings
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")

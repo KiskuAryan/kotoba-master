@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 
-# --- Auth Schemas ---
+# ==================== AUTH SCHEMAS ====================
 class UserRegister(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     email: str = Field(min_length=5, max_length=100)
@@ -17,6 +17,7 @@ class UserOut(BaseModel):
     id: int
     username: str
     email: str
+    is_guest: bool = False
     is_verified: bool = False
     last_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
@@ -41,8 +42,46 @@ class MessageResponse(BaseModel):
     success: bool = True
     dev_token: Optional[str] = None
 
-# --- Word Schemas ---
+
+# ==================== USER SETTINGS SCHEMAS ====================
+class UserSettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    daily_goal: int = 20
+    furigana_mode: str = "always"
+    audio_autoplay: bool = True
+    theme: str = "dark"
+
+class UserSettingsUpdate(BaseModel):
+    daily_goal: Optional[int] = Field(None, ge=5, le=100)
+    furigana_mode: Optional[str] = None  # 'always', 'hover', 'off'
+    audio_autoplay: Optional[bool] = None
+    theme: Optional[str] = None
+
+
+# ==================== DECK SCHEMAS ====================
+class DeckBase(BaseModel):
+    slug: str
+    name: str
+    name_ja: str
+    description: Optional[str] = None
+    icon: str = "📖"
+    color: str = "#E0F2FE"
+    jlpt_level: str = "N5"
+    sort_order: int = 0
+
+class DeckOut(DeckBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    total_words: int = 0
+    words_in_review: int = 0
+    mastered_words: int = 0
+    mastery_percentage: float = 0.0
+    due_count: int = 0
+
+
+# ==================== WORD & PROGRESS SCHEMAS ====================
 class WordBase(BaseModel):
+    deck_id: Optional[int] = None
     lesson_number: int = 1
     book_title: str = "Minna no Nihongo I"
     kanji: Optional[str] = None
@@ -53,32 +92,107 @@ class WordBase(BaseModel):
     part_of_speech: str
     example_ja: Optional[str] = None
     example_en: Optional[str] = None
+    mnemonic: Optional[str] = None
 
 class WordCreate(WordBase):
     pass
 
 class ProgressOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     word_id: int
     is_in_review: bool
     learned_at: Optional[datetime] = None
     star_rating: int = Field(ge=1, le=5)
-    correct_streak: int
-    total_attempts: int
-    correct_attempts: int
-    accuracy_rate: float
+    repetitions: int = 0
+    interval_days: float = 0.0
+    ease_factor: float = 2.5
+    streak: int = 0
+    correct_streak: int = 0
+    total_attempts: int = 0
+    correct_attempts: int = 0
+    accuracy_rate: float = 0.0
     last_reviewed_at: Optional[datetime] = None
     next_review_due: Optional[datetime] = None
+    user_notes: Optional[str] = None
 
 class WordOut(WordBase):
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     progress: Optional[ProgressOut] = None
 
-# --- Chapter / Lesson Schemas ---
+class WordDetailOut(WordOut):
+    deck_name: Optional[str] = None
+
+
+# ==================== REVIEW & SM-2 SCHEMAS ====================
+class ReviewDueItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    word_id: int
+    deck_id: Optional[int] = None
+    deck_name: Optional[str] = None
+    kanji: Optional[str] = None
+    kana: str
+    romaji: str
+    meaning: str
+    jlpt_level: str
+    part_of_speech: str
+    example_ja: Optional[str] = None
+    example_en: Optional[str] = None
+    mnemonic: Optional[str] = None
+    star_rating: int = 1
+    repetitions: int = 0
+    interval_days: float = 0.0
+    ease_factor: float = 2.5
+    next_review_due: Optional[datetime] = None
+    is_overdue: bool = False
+
+class ReviewSubmitRequest(BaseModel):
+    word_id: int
+    rating: str = Field(description="'again', 'hard', 'good', or 'easy'")
+    response_time_ms: Optional[int] = 0
+
+class ReviewSubmitResponse(BaseModel):
+    word_id: int
+    rating: str
+    grade: int
+    is_correct: bool
+    star_rating_before: int
+    star_rating_after: int
+    repetitions: int
+    interval_days: float
+    ease_factor: float
+    streak: int
+    next_review_due: datetime
+    message: str
+
+
+# ==================== STATS SCHEMAS ====================
+class HeatmapItem(BaseModel):
+    date: str  # YYYY-MM-DD
+    count: int
+    accuracy: float
+
+class DueForecastItem(BaseModel):
+    date: str  # YYYY-MM-DD
+    due_count: int
+    cumulative_due: int
+
+class StatsResponse(BaseModel):
+    total_words: int
+    words_in_review: int
+    mastered_count: int
+    overall_accuracy: float
+    total_reviews_done: int
+    current_streak: int
+    longest_streak: int
+    star_distribution: Dict[int, int]
+    heatmap: List[HeatmapItem]
+    accuracy_trend: List[Dict[str, Any]]
+    due_forecast: List[DueForecastItem]
+
+
+# ==================== BACKWARD COMPATIBILITY SCHEMAS ====================
 class ChapterOut(BaseModel):
     lesson_number: int
     title: str
@@ -89,7 +203,6 @@ class ChapterOut(BaseModel):
     mastery_percentage: float
     can_unlock: bool
 
-# --- Review Queue Schemas ---
 class ToggleReviewRequest(BaseModel):
     word_id: int
     is_in_review: bool = True
@@ -99,7 +212,6 @@ class ToggleReviewResponse(BaseModel):
     is_in_review: bool
     message: str
 
-# --- Quiz Schemas ---
 class QuizQuestionOut(BaseModel):
     word_id: int
     lesson_number: int
@@ -109,7 +221,7 @@ class QuizQuestionOut(BaseModel):
     jlpt_level: str
     part_of_speech: str
     current_stars: int
-    options: List[str]  # 4 choices shuffled (1 correct, 3 distractors)
+    options: List[str]
     is_retention_check: bool = False
 
 class QuizStatusOut(BaseModel):
@@ -136,18 +248,17 @@ class QuizAnswerResult(BaseModel):
     star_rating_after: int
     correct_streak: int
     star_change: int
-    chapter_unlocked: Optional[int] = None  # lesson_number if this answer unlocked next chapter
+    chapter_unlocked: Optional[int] = None
     example_ja: Optional[str] = None
     example_en: Optional[str] = None
 
-# --- Deck & Statistics Schemas ---
 class DeckStats(BaseModel):
     total_words: int
     words_in_review: int
-    mastered_count: int      # 5 stars
-    familiar_count: int      # 3-4 stars
-    learning_count: int      # 2 stars
-    unfamiliar_count: int    # 1 star
+    mastered_count: int
+    familiar_count: int
+    learning_count: int
+    unfamiliar_count: int
     overall_accuracy: float
     total_reviews_done: int
     star_distribution: Dict[int, int]
