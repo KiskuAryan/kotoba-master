@@ -375,23 +375,36 @@ async function loadReviewLobby() {
     els.lobbyDueCount.textContent = status.due_count;
     els.lobbyQueueCount.textContent = status.total_in_review;
     
-    if (status.due_count > 0) {
+    if (status.total_in_review === 0) {
+      els.lobbyNextDue.textContent = "—";
+      els.startSessionBtn.disabled = false;
+      els.startSessionBtn.style.background = "linear-gradient(135deg, #4f46e5, #0ea5e9)";
+      els.startSessionBtn.textContent = `📖 Go to Learn & Add Words`;
+      els.startSessionBtn.onclick = () => switchTab("learn");
+      els.startPracticeBtn.style.display = "none";
+    } else if (status.due_count > 0) {
       els.lobbyNextDue.textContent = "Ready!";
       els.lobbyNextDue.style.color = "var(--accent-green)";
       els.startSessionBtn.disabled = false;
+      els.startSessionBtn.style.background = "linear-gradient(135deg, var(--accent-indigo), var(--accent-blue))";
       els.startSessionBtn.textContent = `🚀 Start Due Review (${status.due_count} Due)`;
+      els.startSessionBtn.onclick = () => startReviewSession(false);
+      els.startPracticeBtn.style.display = "block";
     } else if (status.next_due_in_minutes) {
       els.lobbyNextDue.textContent = `${status.next_due_in_minutes}m`;
       els.lobbyNextDue.style.color = "var(--accent-gold)";
       els.startSessionBtn.disabled = true;
-      els.startSessionBtn.textContent = `⏳ No Words Due Right Now`;
+      els.startSessionBtn.style.background = "rgba(255, 255, 255, 0.1)";
+      els.startSessionBtn.textContent = `⏳ Next Review in ${status.next_due_in_minutes}m`;
+      els.startPracticeBtn.style.display = "block";
     } else {
-      els.lobbyNextDue.textContent = status.total_in_review === 0 ? "—" : "Ready";
-      els.startSessionBtn.disabled = status.total_in_review === 0;
+      els.lobbyNextDue.textContent = "Ready";
+      els.startSessionBtn.disabled = false;
       els.startSessionBtn.textContent = `🚀 Start Review Session`;
+      els.startSessionBtn.onclick = () => startReviewSession(false);
+      els.startPracticeBtn.style.display = "block";
     }
 
-    els.startPracticeBtn.style.display = status.total_in_review > 0 ? "block" : "none";
     refreshReviewBadge();
   } catch (err) {
     console.error("Error loading review status:", err);
@@ -630,7 +643,7 @@ function showSessionCompleted() {
 
   const total = state.session.questions.length;
   const correct = state.session.correctCount;
-  const pct = Math.round((correct / total) * 100);
+  const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
   els.summaryScore.textContent = `${correct} / ${total}`;
   els.summaryAccuracy.textContent = `${pct}%`;
