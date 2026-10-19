@@ -1,0 +1,502 @@
+[
+  {
+    "kanji": "食べる",
+    "kana": "たべる",
+    "romaji": "taberu",
+    "meaning": "to eat",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "毎朝パンを食べます。",
+    "example_en": "I eat bread every morning."
+  },
+  {
+    "kanji": "飲む",
+    "kana": "のむ",
+    "romaji": "nomu",
+    "meaning": "to drink",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "水をたくさん飲みます。",
+    "example_en": "I drink a lot of water."
+  },
+  {
+    "kanji": "見る",
+    "kana": "みる",
+    "romaji": "miru",
+    "meaning": "to see; to watch",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "映画を見に行きます。",
+    "example_en": "I am going to watch a movie."
+  },
+  {
+    "kanji": "聞く",
+    "kana": "きく",
+    "romaji": "kiku",
+    "meaning": "to listen; to ask",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "日本の音楽を聞きます。",
+    "example_en": "I listen to Japanese music."
+  },
+  {
+    "kanji": "行く",
+    "kana": "いく",
+    "romaji": "iku",
+    "meaning": "to go",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "明日学校へ行きます。",
+    "example_en": "I will go to school tomorrow."
+  },
+  {
+    "kanji": "来る",
+    "kana": "くる",
+    "romaji": "kuru",
+    "meaning": "to come",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "友達が家に遊びに来ました。",
+    "example_en": "My friend came to my house to hang out."
+  },
+  {
+    "kanji": "話す",
+    "kana": "はなす",
+    "romaji": "hanasu",
+    "meaning": "to speak; to talk",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "先生と日本語で話します。",
+    "example_en": "I speak with the teacher in Japanese."
+  },
+  {
+    "kanji": "買う",
+    "kana": "かう",
+    "romaji": "kau",
+    "meaning": "to buy",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "新しいノートパソコンを買いました。",
+    "example_en": "I bought a new laptop."
+  },
+  {
+    "kanji": "本",
+    "kana": "ほん",
+    "romaji": "hon",
+    "meaning": "book",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "図書館で本を借りました。",
+    "example_en": "I borrowed a book from the library."
+  },
+  {
+    "kanji": "水",
+    "kana": "みず",
+    "romaji": "mizu",
+    "meaning": "water",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "冷たい水をください。",
+    "example_en": "Please give me cold water."
+  },
+  {
+    "kanji": "猫",
+    "kana": "ねこ",
+    "romaji": "neko",
+    "meaning": "cat",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "庭に可愛い猫がいます。",
+    "example_en": "There is a cute cat in the garden."
+  },
+  {
+    "kanji": "犬",
+    "kana": "いぬ",
+    "romaji": "inu",
+    "meaning": "dog",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "毎朝犬の散歩をします。",
+    "example_en": "I walk the dog every morning."
+  },
+  {
+    "kanji": "車",
+    "kana": "くるま",
+    "romaji": "kuruma",
+    "meaning": "car; automobile",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "父の車は白いです。",
+    "example_en": "My father's car is white."
+  },
+  {
+    "kanji": "学校",
+    "kana": "がっこう",
+    "romaji": "gakkou",
+    "meaning": "school",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "学校は８時半に始まります。",
+    "example_en": "School starts at 8:30."
+  },
+  {
+    "kanji": "先生",
+    "kana": "せんせい",
+    "romaji": "sensei",
+    "meaning": "teacher; instructor",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "山田先生はとても親切です。",
+    "example_en": "Teacher Yamada is very kind."
+  },
+  {
+    "kanji": "学生",
+    "kana": "がくせい",
+    "romaji": "gakusei",
+    "meaning": "student",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "私は大学の学生です。",
+    "example_en": "I am a university student."
+  },
+  {
+    "kanji": "大きい",
+    "kana": "おおきい",
+    "romaji": "ookii",
+    "meaning": "big; large",
+    "jlpt_level": "N5",
+    "part_of_speech": "i-adjective",
+    "example_ja": "東京はとても大きい都市です。",
+    "example_en": "Tokyo is a very large city."
+  },
+  {
+    "kanji": "小さい",
+    "kana": "ちいさい",
+    "romaji": "chiisai",
+    "meaning": "small; little",
+    "jlpt_level": "N5",
+    "part_of_speech": "i-adjective",
+    "example_ja": "この部屋は少し小さいです。",
+    "example_en": "This room is a little small."
+  },
+  {
+    "kanji": "新しい",
+    "kana": "あたらしい",
+    "romaji": "atarashii",
+    "meaning": "new; fresh",
+    "jlpt_level": "N5",
+    "part_of_speech": "i-adjective",
+    "example_ja": "新しいプロジェクトを始めます。",
+    "example_en": "I will start a new project."
+  },
+  {
+    "kanji": "古い",
+    "kana": "ふるい",
+    "romaji": "furui",
+    "meaning": "old (not people)",
+    "jlpt_level": "N5",
+    "part_of_speech": "i-adjective",
+    "example_ja": "京都には古いお寺が多いです。",
+    "example_en": "Kyoto has many old temples."
+  },
+  {
+    "kanji": "高い",
+    "kana": "たかい",
+    "romaji": "takai",
+    "meaning": "high; tall; expensive",
+    "jlpt_level": "N5",
+    "part_of_speech": "i-adjective",
+    "example_ja": "富士山は日本で一番高い山です。",
+    "example_en": "Mount Fuji is the highest mountain in Japan."
+  },
+  {
+    "kanji": "安い",
+    "kana": "やすい",
+    "romaji": "yasui",
+    "meaning": "cheap; inexpensive",
+    "jlpt_level": "N5",
+    "part_of_speech": "i-adjective",
+    "example_ja": "このスーパーは野菜が安いです。",
+    "example_en": "Vegetables are cheap at this supermarket."
+  },
+  {
+    "kanji": "静か",
+    "kana": "しずか",
+    "romaji": "shizuka",
+    "meaning": "quiet; peaceful",
+    "jlpt_level": "N5",
+    "part_of_speech": "na-adjective",
+    "example_ja": "夜の図書館は静かです。",
+    "example_en": "The library is quiet at night."
+  },
+  {
+    "kanji": "元気",
+    "kana": "げんき",
+    "romaji": "genki",
+    "meaning": "healthy; lively; energetic",
+    "jlpt_level": "N5",
+    "part_of_speech": "na-adjective",
+    "example_ja": "お元気ですか？",
+    "example_en": "How are you? (Are you well?)"
+  },
+  {
+    "kanji": "勉強",
+    "kana": "べんきょう",
+    "romaji": "benkyou",
+    "meaning": "study; diligence",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "毎日３時間日本語を勉強します。",
+    "example_en": "I study Japanese for 3 hours every day."
+  },
+  {
+    "kanji": "働く",
+    "kana": "はたらく",
+    "romaji": "hataraku",
+    "meaning": "to work; to labor",
+    "jlpt_level": "N5",
+    "part_of_speech": "verb",
+    "example_ja": "IT会社で働きたいです。",
+    "example_en": "I want to work at an IT company."
+  },
+  {
+    "kanji": "時間",
+    "kana": "じかん",
+    "romaji": "jikan",
+    "meaning": "time; hours",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "会議の時間になりました。",
+    "example_en": "It is time for the meeting."
+  },
+  {
+    "kanji": "今日",
+    "kana": "きょう",
+    "romaji": "kyou",
+    "meaning": "today",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "今日はいい天気ですね。",
+    "example_en": "It is nice weather today, isn't it?"
+  },
+  {
+    "kanji": "明日",
+    "kana": "あした",
+    "romaji": "ashita",
+    "meaning": "tomorrow",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "明日締め切りがあります。",
+    "example_en": "There is a deadline tomorrow."
+  },
+  {
+    "kanji": "昨日",
+    "kana": "きのう",
+    "romaji": "kinou",
+    "meaning": "yesterday",
+    "jlpt_level": "N5",
+    "part_of_speech": "noun",
+    "example_ja": "昨日は遅くまで残業しました。",
+    "example_en": "I worked overtime until late yesterday."
+  },
+  {
+    "kanji": "始める",
+    "kana": "はじめる",
+    "romaji": "hajimeru",
+    "meaning": "to begin; to start",
+    "jlpt_level": "N4",
+    "part_of_speech": "verb",
+    "example_ja": "そろそろ会議を始めましょう。",
+    "example_en": "Let's begin the meeting soon."
+  },
+  {
+    "kanji": "終わる",
+    "kana": "おわる",
+    "romaji": "owaru",
+    "meaning": "to end; to finish",
+    "jlpt_level": "N4",
+    "part_of_speech": "verb",
+    "example_ja": "今日のタスクは全て終わりました。",
+    "example_en": "All today's tasks have finished."
+  },
+  {
+    "kanji": "調べる",
+    "kana": "しらべる",
+    "romaji": "shiraberu",
+    "meaning": "to investigate; to look up",
+    "jlpt_level": "N4",
+    "part_of_speech": "verb",
+    "example_ja": "エラーの原因をネットで調べます。",
+    "example_en": "I will look up the cause of the error online."
+  },
+  {
+    "kanji": "説明する",
+    "kana": "せつめいする",
+    "romaji": "setsumei suru",
+    "meaning": "to explain",
+    "jlpt_level": "N4",
+    "part_of_speech": "verb",
+    "example_ja": "システムの機能を説明してください。",
+    "example_en": "Please explain the system features."
+  },
+  {
+    "kanji": "連絡する",
+    "kana": "れんらくする",
+    "romaji": "renraku suru",
+    "meaning": "to contact; to get in touch",
+    "jlpt_level": "N4",
+    "part_of_speech": "verb",
+    "example_ja": "後でメールで連絡します。",
+    "example_en": "I will get in touch later by email."
+  },
+  {
+    "kanji": "相談する",
+    "kana": "そうだんする",
+    "romaji": "soudan suru",
+    "meaning": "to consult; to discuss",
+    "jlpt_level": "N4",
+    "part_of_speech": "verb",
+    "example_ja": "困ったときはマネージャーに相談します。",
+    "example_en": "When I am in trouble, I consult with the manager."
+  },
+  {
+    "kanji": "準備",
+    "kana": "じゅんび",
+    "romaji": "junbi",
+    "meaning": "preparation; arrangements",
+    "jlpt_level": "N4",
+    "part_of_speech": "noun",
+    "example_ja": "プレゼンの準備をしています。",
+    "example_en": "I am preparing for the presentation."
+  },
+  {
+    "kanji": "約束",
+    "kana": "やくそく",
+    "romaji": "yakusoku",
+    "meaning": "promise; appointment",
+    "jlpt_level": "N4",
+    "part_of_speech": "noun",
+    "example_ja": "クライアントと約束があります。",
+    "example_en": "I have an appointment with a client."
+  },
+  {
+    "kanji": "経験",
+    "kana": "けいけん",
+    "romaji": "keiken",
+    "meaning": "experience",
+    "jlpt_level": "N4",
+    "part_of_speech": "noun",
+    "example_ja": "ソフトウェア開発の実務経験があります。",
+    "example_en": "I have practical experience in software development."
+  },
+  {
+    "kanji": "技術",
+    "kana": "ぎじゅつ",
+    "romaji": "gijutsu",
+    "meaning": "technology; skill; technique",
+    "jlpt_level": "N4",
+    "part_of_speech": "noun",
+    "example_ja": "日本のクラウド技術を学びたいです。",
+    "example_en": "I want to learn Japanese cloud technology."
+  },
+  {
+    "kanji": "理由",
+    "kana": "りゆう",
+    "romaji": "riyuu",
+    "meaning": "reason; motive",
+    "jlpt_level": "N4",
+    "part_of_speech": "noun",
+    "example_ja": "遅れた理由を教えてください。",
+    "example_en": "Please tell me the reason you were late."
+  },
+  {
+    "kanji": "目的",
+    "kana": "もくてき",
+    "romaji": "mokuteki",
+    "meaning": "purpose; goal; objective",
+    "jlpt_level": "N4",
+    "part_of_speech": "noun",
+    "example_ja": "このプロジェクトの目的は何ですか？",
+    "example_en": "What is the purpose of this project?"
+  },
+  {
+    "kanji": "複雑",
+    "kana": "ふくざつ",
+    "romaji": "fukuzatsu",
+    "meaning": "complex; complicated",
+    "jlpt_level": "N4",
+    "part_of_speech": "na-adjective",
+    "example_ja": "このアルゴリズムは少し複雑です。",
+    "example_en": "This algorithm is a bit complicated."
+  },
+  {
+    "kanji": "簡単",
+    "kana": "かんたん",
+    "romaji": "kantan",
+    "meaning": "simple; easy",
+    "jlpt_level": "N4",
+    "part_of_speech": "na-adjective",
+    "example_ja": "使い方がとても簡単です。",
+    "example_en": "It is very simple to use."
+  },
+  {
+    "kanji": "便利",
+    "kana": "べんり",
+    "romaji": "benri",
+    "meaning": "convenient; handy",
+    "jlpt_level": "N4",
+    "part_of_speech": "na-adjective",
+    "example_ja": "このツールはコードの管理に便利です。",
+    "example_en": "This tool is convenient for code management."
+  },
+  {
+    "kanji": "不便",
+    "kana": "ふべん",
+    "romaji": "fuben",
+    "meaning": "inconvenient",
+    "jlpt_level": "N4",
+    "part_of_speech": "na-adjective",
+    "example_ja": "駅から遠いので少し不便です。",
+    "example_en": "It is a bit inconvenient because it is far from the station."
+  },
+  {
+    "kanji": "大切",
+    "kana": "たいせつ",
+    "romaji": "taisetsu",
+    "meaning": "important; precious",
+    "jlpt_level": "N4",
+    "part_of_speech": "na-adjective",
+    "example_ja": "チームワークはビジネスにおいて大切です。",
+    "example_en": "Teamwork is important in business."
+  },
+  {
+    "kanji": "注意する",
+    "kana": "ちゅういする",
+    "romaji": "chuui suru",
+    "meaning": "to pay attention; to beware",
+    "jlpt_level": "N4",
+    "part_of_speech": "verb",
+    "example_ja": "データ漏洩に注意してください。",
+    "example_en": "Please pay attention to data leakage."
+  },
+  {
+    "kanji": "必ず",
+    "kana": "かならず",
+    "romaji": "kanarazu",
+    "meaning": "definitely; without fail",
+    "jlpt_level": "N4",
+    "part_of_speech": "adverb",
+    "example_ja": "締め切りは必ず守ります。",
+    "example_en": "I will meet the deadline without fail."
+  },
+  {
+    "kanji": "特に",
+    "kana": "とくに",
+    "romaji": "tokuni",
+    "meaning": "especially; particularly",
+    "jlpt_level": "N4",
+    "part_of_speech": "adverb",
+    "example_ja": "データベースの設計が特に得意です。",
+    "example_en": "I am particularly good at database design."
+  }
+]

@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    container_name: kotoba-master-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////app/backend/kotoba.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - kotoba_data:/app/backend
+    restart: unless-stopped
+
+volumes:
+  kotoba_data:

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KotobaMaster 言葉マスター — 5-Star Spaced Recall Engine</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">語</div>
+      <div class="logo-text">
+        <h1>KotobaMaster <span style="font-weight: 400; opacity: 0.8;">言葉マスター</span></h1>
+        <span>5-Star Spaced Recall • JLPT N5 &amp; N4</span>
+      </div>
+    </div>
+
+    <div class="nav-controls">
+      <!-- JLPT Level Filter Pills -->
+      <div class="filter-pills">
+        <button class="pill-btn active" data-level="all">All Decks</button>
+        <button class="pill-btn" data-level="N5">JLPT N5</button>
+        <button class="pill-btn" data-level="N4">JLPT N4</button>
+      </div>
+
+      <!-- Mode Tabs -->
+      <div class="nav-tabs">
+        <button class="tab-btn active" data-tab="quiz">🎯 Recall Quiz</button>
+        <button class="tab-btn" data-tab="browse">📚 Deck Browser</button>
+        <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Area -->
+  <main>
+
+    <!-- 1. QUIZ VIEW (Primary Spaced Recall Game Loop) -->
+    <section id="quiz-view" class="view-section active">
+      <div class="quiz-container">
+        
+        <!-- Live Session Stats Bar -->
+        <div class="stats-bar">
+          <div class="streak-badge">
+            <span id="streak-display">🔥 0 Streak</span>
+          </div>
+          <div style="color: var(--text-muted);">
+            Session Reviews: <strong id="session-count" style="color: #fff;">0</strong>
+          </div>
+        </div>
+
+        <!-- The Flashcard / Recall Stage -->
+        <div class="card-stage">
+          <div class="card-top-meta">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span id="level-badge" class="badge badge-n5">N5</span>
+              <span id="pos-badge" class="badge badge-pos">verb</span>
+            </div>
+            <div id="star-rating" class="star-rating-display">
+              <!-- Dynamically rendered stars -->
+            </div>
+          </div>
+
+          <div class="prompt-japanese">
+            <div id="prompt-kanji" class="prompt-kanji">食べる</div>
+            <div id="prompt-kana" class="prompt-kana">たべる</div>
+            <div id="prompt-romaji" class="prompt-romaji">taberu</div>
+          </div>
+
+          <button id="audio-btn" class="audio-btn" title="Listen to Japanese pronunciation">
+            <span>🔊 Pronounce</span>
+          </button>
+        </div>
+
+        <!-- 4 MCQ Options Grid -->
+        <div id="options-grid" class="options-grid">
+          <!-- Dynamically populated buttons -->
+        </div>
+
+        <!-- Instant Feedback Card -->
+        <div id="feedback-card" class="feedback-card">
+          <div class="feedback-header">
+            <div id="feedback-status" class="feedback-status correct">✓ Correct Recall!</div>
+            <div id="feedback-change" class="feedback-change-pill change-plus">⭐ 1 → ⭐ 2 (+1 Star)</div>
+          </div>
+
+          <div class="example-box">
+            <div id="example-ja" class="example-ja">毎朝パンを食べます。</div>
+            <div id="example-en" class="example-en">I eat bread every morning.</div>
+          </div>
+
+          <!-- AI Sentence & Grammar Breakdown -->
+          <div id="ai-box" style="display: none; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.85rem;">
+            <div style="font-weight: 700; color: #a5b4fc; margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+              <span>✨ AI Sentence &amp; Mnemonic Breakdown</span>
+              <span id="ai-source-badge" style="font-size: 0.7rem; opacity: 0.7;"></span>
+            </div>
+            <div id="ai-sentence" style="font-size: 0.95rem; font-weight: 500; color: #fff; margin-bottom: 0.2rem;"></div>
+            <div id="ai-romaji" style="font-style: italic; color: #cbd5e1; margin-bottom: 0.2rem;"></div>
+            <div id="ai-translation" style="color: #94a3b8; margin-bottom: 0.5rem;"></div>
+            <div id="ai-grammar" style="color: #e2e8f0; margin-bottom: 0.3rem;"></div>
+            <div id="ai-mnemonic" style="color: #fde047; font-weight: 500;"></div>
+          </div>
+
+          <div class="next-action-bar" style="display: flex; justify-content: space-between; align-items: center;">
+            <button id="ai-explain-btn" class="pill-btn" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); padding: 0.5rem 1rem;">
+              ✨ AI Context &amp; Mnemonic
+            </button>
+            <button id="next-btn" class="btn-primary">
+              <span>Next Word</span>
+              <span style="font-size: 0.8rem; opacity: 0.75; font-weight: 400;">[Enter ↵]</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 2. DECK BROWSER VIEW -->
+    <section id="browse-view" class="view-section">
+      <div class="deck-controls">
+        <input type="text" id="search-input" class="search-input" placeholder="Search kanji, kana, romaji, or meaning (e.g. eat, 勉強)...">
+        <select id="star-filter" class="search-input" style="max-width: 170px;">
+          <option value="">All Mastery Stars</option>
+          <option value="1">⭐ 1 Star (Unfamiliar)</option>
+          <option value="2">⭐⭐ 2 Stars (Learning)</option>
+          <option value="3">⭐⭐⭐ 3 Stars (Familiar)</option>
+          <option value="4">⭐⭐⭐⭐ 4 Stars (Strong)</option>
+          <option value="5">⭐⭐⭐⭐⭐ 5 Stars (Mastered)</option>
+        </select>
+      </div>
+      <div id="words-grid" class="words-grid">
+        <!-- Dynamically rendered word cards -->
+      </div>
+    </section>
+
+    <!-- 3. ANALYTICS & PROGRESS VIEW -->
+    <section id="analytics-view" class="view-section">
+      <div class="analytics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Total Vocabulary</div>
+          <div id="metric-total" class="metric-val">50</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Mastered (5★)</div>
+          <div id="metric-mastered" class="metric-val" style="color: var(--accent-gold);">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">In Learning (2-4★)</div>
+          <div id="metric-learning" class="metric-val" style="color: #38bdf8;">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Overall Accuracy</div>
+          <div id="metric-accuracy" class="metric-val" style="color: var(--accent-green);">0%</div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>5-Star Mastery Distribution</h3>
+        <div id="star-bars-container">
+          <!-- Dynamically populated star distribution rows -->
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end;">
+        <button id="reset-btn" class="pill-btn" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.6rem 1.25rem;">
+          ⚠️ Reset Deck Progress to 1 Star
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
