@@ -32,6 +32,11 @@
 
     <!-- User Auth Area -->
     <div class="user-auth-area">
+      <button id="open-mailbox-btn" class="pill-btn" title="Simulated Email Inbox" style="padding: 0.35rem 0.65rem; font-size: 0.8rem; background: rgba(255, 255, 255, 0.06); color: #cbd5e1; border: 1px solid var(--border-color); cursor: pointer; display: flex; align-items: center; gap: 0.4rem;">
+        <span>📬 Mailbox</span>
+        <span id="mailbox-unread-count" style="display: none; background: #6366f1; color: white; border-radius: 9999px; padding: 1px 6px; font-size: 0.7rem; font-weight: 700;">0</span>
+      </button>
+
       <!-- Logged in state -->
       <div id="auth-logged-in" style="display: none; align-items: center; gap: 0.6rem;">
         <span class="user-pill">
@@ -407,26 +412,42 @@
     </div>
   </div>
 
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
   <!-- ==================== USER AUTH MODAL ==================== -->
   <div id="auth-modal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 380px;">
-      <!-- Tabs: Sign In / Register -->
-      <div style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 1.25rem; gap: 0.5rem;">
+    <div class="modal-content" style="max-width: 400px;">
+      
+      <!-- Modal Navigation Tabs (Login / Register) -->
+      <div id="auth-tabs-row" style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 1.25rem; gap: 0.5rem;">
         <button id="tab-auth-login" class="pill-btn" style="flex: 1; text-align: center; border-radius: 8px; background: rgba(99, 102, 241, 0.25); color: #c7d2fe; border: 1px solid var(--accent-indigo);">Sign In</button>
         <button id="tab-auth-register" class="pill-btn" style="flex: 1; text-align: center; border-radius: 8px; background: transparent; color: var(--text-muted); border: 1px solid transparent;">Register</button>
+      </div>
+
+      <!-- Section Title for Forgot / Reset Flows -->
+      <div id="auth-sub-header" style="display: none; margin-bottom: 1rem;">
+        <h3 id="auth-sub-title" style="font-size: 1.15rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.25rem;">Forgot Password</h3>
+        <p id="auth-sub-desc" style="font-size: 0.8rem; color: var(--text-muted);">Enter your email to receive password reset instructions.</p>
       </div>
 
       <!-- Error / Alert Banner -->
       <div id="auth-error-msg" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.6rem 0.85rem; border-radius: 6px; font-size: 0.85rem; margin-bottom: 1rem;"></div>
 
-      <!-- Login Form -->
+      <!-- Info / Success Banner -->
+      <div id="auth-info-msg" style="display: none; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; padding: 0.6rem 0.85rem; border-radius: 6px; font-size: 0.85rem; margin-bottom: 1rem;"></div>
+
+      <!-- 1. Login Form -->
       <form id="login-form">
         <div style="margin-bottom: 1rem;">
           <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Username or Email</label>
           <input type="text" id="login-username" required class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="demo">
         </div>
         <div style="margin-bottom: 1.25rem;">
-          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Password</label>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Password</label>
+            <a id="link-to-forgot" href="#" style="font-size: 0.75rem; color: #818cf8; text-decoration: none;">Forgot password?</a>
+          </div>
           <input type="password" id="login-password" required class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="••••••••">
         </div>
         <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-size: 0.95rem;">
@@ -434,7 +455,7 @@
         </button>
       </form>
 
-      <!-- Register Form -->
+      <!-- 2. Register Form -->
       <form id="register-form" style="display: none;">
         <div style="margin-bottom: 0.75rem;">
           <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Username</label>
@@ -453,8 +474,64 @@
         </button>
       </form>
 
+      <!-- 3. Forgot Password Form -->
+      <form id="forgot-form" style="display: none;">
+        <div style="margin-bottom: 1.25rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Registered Email Address</label>
+          <input type="email" id="forgot-email" required class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="you@example.com">
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-size: 0.95rem; background: #6366f1;">
+          📨 Send Reset Instructions
+        </button>
+        <div style="margin-top: 1rem; text-align: center;">
+          <a id="link-forgot-back-to-login" href="#" style="font-size: 0.8rem; color: var(--text-muted); text-decoration: none;">← Back to Sign In</a>
+        </div>
+      </form>
+
+      <!-- 4. Reset Password Form -->
+      <form id="reset-password-form" style="display: none;">
+        <div style="margin-bottom: 0.75rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Reset Token</label>
+          <input type="text" id="reset-token-input" required class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem; font-family: monospace; font-size: 0.8rem;" placeholder="Paste token from email">
+        </div>
+        <div style="margin-bottom: 1.25rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">New Password (min 6 characters)</label>
+          <input type="password" id="reset-new-password" required minlength="6" class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-size: 0.95rem; background: linear-gradient(135deg, #10b981, #0ea5e9);">
+          🔐 Set New Password
+        </button>
+        <div style="margin-top: 1rem; text-align: center;">
+          <a id="link-reset-back-to-login" href="#" style="font-size: 0.8rem; color: var(--text-muted); text-decoration: none;">← Back to Sign In</a>
+        </div>
+      </form>
+
       <div style="margin-top: 1rem; text-align: center;">
         <button type="button" id="auth-modal-close-btn" class="pill-btn" style="background: transparent; color: var(--text-muted); font-size: 0.8rem; border: none; cursor: pointer;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SIMULATED MAILBOX MODAL ==================== -->
+  <div id="mailbox-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 580px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.3rem;">📬</span>
+          <h3 style="font-size: 1.15rem; font-weight: 700;">Simulated Mailbox</h3>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="refresh-mailbox-btn" class="pill-btn" style="padding: 0.35rem 0.7rem; font-size: 0.75rem; background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid #6366f1;">🔄 Refresh</button>
+          <button id="close-mailbox-btn" class="pill-btn" style="padding: 0.35rem 0.6rem; font-size: 0.8rem; background: transparent; color: var(--text-muted); border: none;">✕</button>
+        </div>
+      </div>
+      
+      <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        Recent emails dispatched by the server (Welcome messages, Login confirmation alerts, Password Reset links):
+      </p>
+
+      <div id="mailbox-list" style="overflow-y: auto; flex: 1; min-height: 200px; max-height: 380px; padding-right: 4px;">
+        <!-- Populated dynamically -->
       </div>
     </div>
   </div>

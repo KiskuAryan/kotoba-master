@@ -17,12 +17,29 @@ class UserOut(BaseModel):
     id: int
     username: str
     email: str
+    is_verified: bool = False
+    last_login_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=100)
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10)
+    new_password: str = Field(min_length=6, max_length=100)
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=10)
+
+class MessageResponse(BaseModel):
+    message: str
+    success: bool = True
+    dev_token: Optional[str] = None
 
 # --- Word Schemas ---
 class WordBase(BaseModel):

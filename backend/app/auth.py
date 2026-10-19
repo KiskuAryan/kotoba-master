@@ -43,7 +43,8 @@ def ensure_demo_user(db: Session) -> User:
             id=1,
             username="demo",
             email="demo@kotobamaster.com",
-            hashed_password=hash_password("demo1234")
+            hashed_password=hash_password("demo1234"),
+            is_verified=True
         )
         db.add(user)
         db.commit()

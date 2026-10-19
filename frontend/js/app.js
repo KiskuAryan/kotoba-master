@@ -146,17 +146,39 @@ const els = {
   openAuthBtn: document.getElementById("open-auth-btn"),
   logoutBtn: document.getElementById("logout-btn"),
   authModal: document.getElementById("auth-modal"),
+  authTabsRow: document.getElementById("auth-tabs-row"),
+  authSubHeader: document.getElementById("auth-sub-header"),
+  authSubTitle: document.getElementById("auth-sub-title"),
+  authSubDesc: document.getElementById("auth-sub-desc"),
   tabAuthLogin: document.getElementById("tab-auth-login"),
   tabAuthRegister: document.getElementById("tab-auth-register"),
   authErrorMsg: document.getElementById("auth-error-msg"),
+  authInfoMsg: document.getElementById("auth-info-msg"),
   loginForm: document.getElementById("login-form"),
   registerForm: document.getElementById("register-form"),
+  forgotForm: document.getElementById("forgot-form"),
+  resetPasswordForm: document.getElementById("reset-password-form"),
   loginUsername: document.getElementById("login-username"),
   loginPassword: document.getElementById("login-password"),
+  linkToForgot: document.getElementById("link-to-forgot"),
   regUsername: document.getElementById("reg-username"),
   regEmail: document.getElementById("reg-email"),
   regPassword: document.getElementById("reg-password"),
-  authModalCloseBtn: document.getElementById("auth-modal-close-btn")
+  forgotEmail: document.getElementById("forgot-email"),
+  linkForgotBackToLogin: document.getElementById("link-forgot-back-to-login"),
+  resetTokenInput: document.getElementById("reset-token-input"),
+  resetNewPassword: document.getElementById("reset-new-password"),
+  linkResetBackToLogin: document.getElementById("link-reset-back-to-login"),
+  authModalCloseBtn: document.getElementById("auth-modal-close-btn"),
+
+  // Simulated Mailbox & Notifications
+  openMailboxBtn: document.getElementById("open-mailbox-btn"),
+  mailboxModal: document.getElementById("mailbox-modal"),
+  closeMailboxBtn: document.getElementById("close-mailbox-btn"),
+  refreshMailboxBtn: document.getElementById("refresh-mailbox-btn"),
+  mailboxList: document.getElementById("mailbox-list"),
+  mailboxUnreadCount: document.getElementById("mailbox-unread-count"),
+  toastContainer: document.getElementById("toast-container")
 };
 
 // --- Japanese TTS ---
@@ -880,6 +902,23 @@ if (els.resetBtn) {
   });
 }
 
+// ==================== TOAST NOTIFICATIONS ====================
+function showToast(message, type = "info", duration = 4000) {
+  if (!els.toastContainer) return;
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  
+  const icon = type === "success" ? "✅" : (type === "warning" ? "⚠️" : (type === "error" ? "❌" : "ℹ️"));
+  toast.innerHTML = `<span style="font-size: 1.1rem;">${icon}</span><div style="flex: 1;">${message}</div>`;
+  
+  els.toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(100%)";
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
 // ==================== 5. USER AUTHENTICATION & MULTI-USER SYNC ====================
 function initAuth() {
   if (els.openAuthBtn) {
@@ -900,6 +939,27 @@ function initAuth() {
     els.tabAuthRegister.addEventListener("click", () => showAuthModal("register"));
   }
 
+  if (els.linkToForgot) {
+    els.linkToForgot.addEventListener("click", (e) => {
+      e.preventDefault();
+      showAuthModal("forgot");
+    });
+  }
+
+  if (els.linkForgotBackToLogin) {
+    els.linkForgotBackToLogin.addEventListener("click", (e) => {
+      e.preventDefault();
+      showAuthModal("login");
+    });
+  }
+
+  if (els.linkResetBackToLogin) {
+    els.linkResetBackToLogin.addEventListener("click", (e) => {
+      e.preventDefault();
+      showAuthModal("login");
+    });
+  }
+
   if (els.logoutBtn) {
     els.logoutBtn.addEventListener("click", () => logoutUser());
   }
@@ -917,29 +977,83 @@ function initAuth() {
       await handleRegister();
     });
   }
+
+  if (els.forgotForm) {
+    els.forgotForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await handleForgotPassword();
+    });
+  }
+
+  if (els.resetPasswordForm) {
+    els.resetPasswordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await handleResetPassword();
+    });
+  }
+
+  // Simulated Mailbox controls
+  if (els.openMailboxBtn) {
+    els.openMailboxBtn.addEventListener("click", () => openMailbox());
+  }
+  if (els.closeMailboxBtn) {
+    els.closeMailboxBtn.addEventListener("click", () => {
+      els.mailboxModal.style.display = "none";
+    });
+  }
+  if (els.refreshMailboxBtn) {
+    els.refreshMailboxBtn.addEventListener("click", () => renderMailboxList());
+  }
 }
 
-function showAuthModal(mode = "login") {
+function showAuthModal(mode = "login", prefillToken = "") {
   els.authModal.style.display = "flex";
   els.authErrorMsg.style.display = "none";
+  els.authInfoMsg.style.display = "none";
+
+  // Reset forms visibility
+  els.loginForm.style.display = "none";
+  els.registerForm.style.display = "none";
+  els.forgotForm.style.display = "none";
+  els.resetPasswordForm.style.display = "none";
+
   if (mode === "login") {
+    els.authTabsRow.style.display = "flex";
+    els.authSubHeader.style.display = "none";
     els.loginForm.style.display = "block";
-    els.registerForm.style.display = "none";
+    
     els.tabAuthLogin.style.background = "rgba(99, 102, 241, 0.25)";
     els.tabAuthLogin.style.color = "#c7d2fe";
     els.tabAuthLogin.style.borderColor = "var(--accent-indigo)";
     els.tabAuthRegister.style.background = "transparent";
     els.tabAuthRegister.style.color = "var(--text-muted)";
     els.tabAuthRegister.style.borderColor = "transparent";
-  } else {
-    els.loginForm.style.display = "none";
+  } else if (mode === "register") {
+    els.authTabsRow.style.display = "flex";
+    els.authSubHeader.style.display = "none";
     els.registerForm.style.display = "block";
+
     els.tabAuthRegister.style.background = "rgba(16, 185, 129, 0.25)";
     els.tabAuthRegister.style.color = "#a7f3d0";
     els.tabAuthRegister.style.borderColor = "var(--accent-green)";
     els.tabAuthLogin.style.background = "transparent";
     els.tabAuthLogin.style.color = "var(--text-muted)";
     els.tabAuthLogin.style.borderColor = "transparent";
+  } else if (mode === "forgot") {
+    els.authTabsRow.style.display = "none";
+    els.authSubHeader.style.display = "block";
+    els.authSubTitle.textContent = "🔑 Forgot Password";
+    els.authSubDesc.textContent = "Enter your registered email to receive password reset instructions.";
+    els.forgotForm.style.display = "block";
+  } else if (mode === "reset") {
+    els.authTabsRow.style.display = "none";
+    els.authSubHeader.style.display = "block";
+    els.authSubTitle.textContent = "🔐 Choose New Password";
+    els.authSubDesc.textContent = "Enter your reset token and choose a new password.";
+    els.resetPasswordForm.style.display = "block";
+    if (prefillToken) {
+      els.resetTokenInput.value = prefillToken;
+    }
   }
 }
 
@@ -970,7 +1084,10 @@ function renderAuthUI(user) {
   if (user) {
     els.authLoggedIn.style.display = "flex";
     els.authLoggedOut.style.display = "none";
-    els.currentUsername.textContent = user.username;
+    els.currentUsername.textContent = user.username + (user.is_verified ? " ✓" : "");
+    if (user.is_verified) {
+      els.currentUsername.title = "Verified Account";
+    }
   } else {
     els.authLoggedIn.style.display = "none";
     els.authLoggedOut.style.display = "flex";
@@ -1004,6 +1121,9 @@ async function handleLogin() {
     renderAuthUI(data.user);
     els.authModal.style.display = "none";
     els.loginPassword.value = "";
+
+    showToast(`🔐 Welcome back, ${data.user.username}! Login confirmation sent to ${data.user.email}.`, "success");
+    updateMailboxCount();
 
     await loadChaptersList();
     await loadLesson(state.selectedLesson);
@@ -1040,6 +1160,9 @@ async function handleRegister() {
     els.authModal.style.display = "none";
     els.regPassword.value = "";
 
+    showToast(`🌸 Welcome to KotobaMaster, ${data.user.username}! Confirmation email sent to ${data.user.email}.`, "success");
+    updateMailboxCount();
+
     await loadChaptersList();
     await loadLesson(1);
     refreshReviewBadge();
@@ -1049,25 +1172,202 @@ async function handleRegister() {
   }
 }
 
+async function handleForgotPassword() {
+  const email = els.forgotEmail.value.trim();
+  if (!email) return;
+
+  try {
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await res.json();
+    els.authErrorMsg.style.display = "none";
+    
+    if (data.dev_token) {
+      els.authInfoMsg.innerHTML = `
+        <div>${data.message}</div>
+        <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(16, 185, 129, 0.4);">
+          <strong style="color: #6ee7b7;">⚡ Dev Token:</strong> <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 4px; font-size: 0.75rem;">${data.dev_token}</code><br>
+          <button id="btn-use-dev-token" type="button" class="pill-btn" style="margin-top: 0.5rem; background: #6366f1; color: white; padding: 0.3rem 0.7rem; font-size: 0.75rem;">Continue with this Token →</button>
+        </div>
+      `;
+      els.authInfoMsg.style.display = "block";
+      document.getElementById("btn-use-dev-token")?.addEventListener("click", () => {
+        showAuthModal("reset", data.dev_token);
+      });
+    } else {
+      els.authInfoMsg.textContent = data.message;
+      els.authInfoMsg.style.display = "block";
+    }
+
+    showToast("📨 Password reset instructions sent!", "info");
+    updateMailboxCount();
+  } catch (err) {
+    els.authErrorMsg.textContent = "Unable to process request. Please try again.";
+    els.authErrorMsg.style.display = "block";
+  }
+}
+
+async function handleResetPassword() {
+  const token = els.resetTokenInput.value.trim();
+  const newPassword = els.resetNewPassword.value;
+
+  if (!token || !newPassword) return;
+
+  try {
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: token,
+        new_password: newPassword
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      els.authErrorMsg.textContent = data.detail || "Password reset failed.";
+      els.authErrorMsg.style.display = "block";
+      return;
+    }
+
+    showAuthModal("login");
+    els.authInfoMsg.textContent = "Your password has been successfully reset! You can now sign in.";
+    els.authInfoMsg.style.display = "block";
+    els.resetNewPassword.value = "";
+    els.resetTokenInput.value = "";
+    showToast("🔐 Password reset complete! Please sign in.", "success");
+  } catch (err) {
+    els.authErrorMsg.textContent = "Failed to reset password. Please try again.";
+    els.authErrorMsg.style.display = "block";
+  }
+}
+
 async function logoutUser() {
   localStorage.removeItem("kotoba_token");
   state.token = null;
   state.user = null;
   renderAuthUI(null);
+  showToast("Logged out successfully.", "info");
   await loadChaptersList();
   await loadLesson(1);
   refreshReviewBadge();
 }
 
+// ==================== SIMULATED MAILBOX ====================
+async function openMailbox() {
+  els.mailboxModal.style.display = "flex";
+  await renderMailboxList();
+}
+
+async function renderMailboxList() {
+  try {
+    const res = await fetch("/api/auth/dev-emails");
+    const emails = await res.json();
+    
+    if (!emails || emails.length === 0) {
+      els.mailboxList.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); padding: 2.5rem 1rem;">
+          <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📭</div>
+          <p>No emails logged yet.</p>
+          <p style="font-size: 0.75rem; margin-top: 0.25rem;">Sign in, register, or request a password reset to see outgoing emails appear here.</p>
+        </div>
+      `;
+      return;
+    }
+
+    els.mailboxList.innerHTML = emails.map((mail, idx) => {
+      const typeBadge = mail.type === "login_alert" 
+        ? `<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem;">🔐 Login Alert</span>`
+        : (mail.type === "welcome"
+          ? `<span style="background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem;">🌸 Welcome</span>`
+          : `<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem;">🔑 Password Reset</span>`);
+
+      const tokenAction = mail.token ? `
+        <button class="pill-btn btn-use-mail-token" data-token="${mail.token}" data-type="${mail.type}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; background: #6366f1; color: white;">
+          ${mail.type === 'welcome' ? '✓ Verify Email' : '🔑 Use Reset Token'}
+        </button>
+      ` : '';
+
+      return `
+        <div class="email-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <div>${typeBadge}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">${new Date(mail.timestamp).toLocaleTimeString()}</div>
+          </div>
+          <div style="font-weight: 600; font-size: 0.9rem; color: #f8fafc; margin-bottom: 0.2rem;">${mail.subject}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">To: <strong style="color: #cbd5e1;">${mail.to}</strong></div>
+          <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 0.6rem; font-size: 0.8rem; color: #cbd5e1; line-height: 1.4; white-space: pre-wrap; font-family: sans-serif; max-height: 120px; overflow-y: auto;">${mail.text}</div>
+          ${tokenAction ? `<div style="margin-top: 0.5rem; display: flex; justify-content: flex-end;">${tokenAction}</div>` : ''}
+        </div>
+      `;
+    }).join("");
+
+    // Wire token buttons
+    els.mailboxList.querySelectorAll(".btn-use-mail-token").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const token = btn.dataset.token;
+        const type = btn.dataset.type;
+        els.mailboxModal.style.display = "none";
+        if (type === "welcome") {
+          await verifyEmailWithToken(token);
+        } else {
+          showAuthModal("reset", token);
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error("Failed to load mailbox:", err);
+  }
+}
+
+async function updateMailboxCount() {
+  try {
+    const res = await fetch("/api/auth/dev-emails");
+    const emails = await res.json();
+    if (emails && emails.length > 0 && els.mailboxUnreadCount) {
+      els.mailboxUnreadCount.textContent = emails.length;
+      els.mailboxUnreadCount.style.display = "inline-block";
+    }
+  } catch (err) {
+    // Silent fail
+  }
+}
+
+async function verifyEmailWithToken(token) {
+  try {
+    const res = await fetch("/api/auth/verify-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast("🌸 Email verified successfully! ようこそ！", "success");
+      await checkAuthStatus();
+    } else {
+      showToast(data.detail || "Email verification failed.", "error");
+    }
+  } catch (err) {
+    showToast("Network error during verification.", "error");
+  }
+}
+
 // Global Keyboard Shortcuts
 window.addEventListener("keydown", (e) => {
   if (e.key === " " && state.activeTab === "learn") {
+    // Avoid flipping flashcard if user is typing in an input
+    if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
     e.preventDefault();
     state.isCardFlipped = !state.isCardFlipped;
     els.flashcardInner.classList.toggle("flipped", state.isCardFlipped);
   }
   
-  if (state.activeTab === "learn") {
+  if (state.activeTab === "learn" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
     if (e.key === "ArrowLeft") els.fcPrevBtn.click();
     if (e.key === "ArrowRight") els.fcNextBtn.click();
   }
@@ -1093,4 +1393,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadChaptersList();
   await loadLesson(1);
   refreshReviewBadge();
+  updateMailboxCount();
+
+  // Check URL query parameters for reset_token or verify_token
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("reset_token")) {
+    const resetToken = params.get("reset_token");
+    showAuthModal("reset", resetToken);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } else if (params.has("verify_token")) {
+    const verifyToken = params.get("verify_token");
+    await verifyEmailWithToken(verifyToken);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
 });
