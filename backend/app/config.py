@@ -8,7 +8,7 @@ class Settings:
     PROJECT_NAME: str = "KotobaMaster"
     PROJECT_VERSION: str = "1.0.0"
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/kotoba.db")
-    SEED_FILE: Path = DATA_DIR / "vocab_seeds.json"
+    SEED_FILE: Path = DATA_DIR / "minna_vocab.json"
     CORS_ORIGINS: list = ["*"]
 
 settings = Settings()

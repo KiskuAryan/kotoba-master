@@ -6,17 +6,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.config import settings
 from app.database import engine, SessionLocal, Base
-from app.seed import init_db, seed_vocab
-from app.routes import quiz, decks, words, ai
+from app.seed import init_db, seed_vocab, seed_chapters
+from app.routes import quiz, decks, words, ai, chapters
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure tables exist and initial vocabulary is seeded
+    # Startup: ensure tables exist, chapters seeded, and initial vocabulary seeded
     init_db()
     db = SessionLocal()
     try:
+        seed_chapters(db)
         seed_vocab(db)
     finally:
         db.close()
@@ -41,6 +42,7 @@ app.add_middleware(
 
 # Include API Routers
 app.include_router(quiz.router, prefix="/api")
+app.include_router(chapters.router, prefix="/api")
 app.include_router(decks.router, prefix="/api")
 app.include_router(words.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KotobaMaster 言葉マスター — 5-Star Spaced Recall Engine</title>
+  <title>KotobaMaster 言葉マスター — Minna no Nihongo 5-Star Recall</title>
   <link rel="stylesheet" href="/static/css/styles.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⭐</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌸</text></svg>">
 </head>
 <body>
 
@@ -14,83 +14,176 @@
     <div class="logo-area">
       <div class="logo-icon">語</div>
       <div class="logo-text">
-        <h1>KotobaMaster <span style="font-weight: 400; opacity: 0.8;">言葉マスター</span></h1>
-        <span>5-Star Spaced Recall • JLPT N5 &amp; N4</span>
+        <h1>KotobaMaster <span style="font-weight: 400; opacity: 0.85;">言葉マスター</span></h1>
+        <span>みんなの日本語 (Minna no Nihongo I) • Lessons 1–25</span>
       </div>
     </div>
 
-    <div class="nav-controls">
-      <!-- JLPT Level Filter Pills -->
-      <div class="filter-pills">
-        <button class="pill-btn active" data-level="all">All Decks</button>
-        <button class="pill-btn" data-level="N5">JLPT N5</button>
-        <button class="pill-btn" data-level="N4">JLPT N4</button>
-      </div>
-
-      <!-- Mode Tabs -->
-      <div class="nav-tabs">
-        <button class="tab-btn active" data-tab="quiz">🎯 Recall Quiz</button>
-        <button class="tab-btn" data-tab="browse">📚 Deck Browser</button>
-        <button class="tab-btn" data-tab="analytics">📊 Analytics</button>
-      </div>
+    <!-- Mode Tabs -->
+    <div class="nav-tabs">
+      <button class="tab-btn active" data-tab="learn">📖 Learn (学習)</button>
+      <button class="tab-btn" data-tab="quiz">
+        🎯 Review (復習)
+        <span id="review-badge-count" class="tab-badge">0</span>
+      </button>
+      <button class="tab-btn" data-tab="roadmap">🗺️ Roadmap (課)</button>
+      <button class="tab-btn" data-tab="analytics">📊 Progress</button>
     </div>
   </header>
 
   <!-- Main View Area -->
   <main>
 
-    <!-- 1. QUIZ VIEW (Primary Spaced Recall Game Loop) -->
-    <section id="quiz-view" class="view-section active">
+    <!-- ==================== 1. LEARN VIEW (Flashcards) ==================== -->
+    <section id="learn-view" class="view-section active">
+      
+      <!-- Top Bar: Chapter Selector & Mastery Tracker -->
+      <div class="learn-header-bar">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <label for="chapter-select" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Lesson:</label>
+          <select id="chapter-select" class="chapter-select">
+            <!-- Dynamically populated lessons 1-25 -->
+          </select>
+        </div>
+
+        <div class="chapter-mastery-box">
+          <span style="color: var(--text-muted);">Lesson Mastery:</span>
+          <div class="mastery-progress-track">
+            <div id="learn-mastery-fill" class="mastery-progress-fill" style="width: 0%;"></div>
+          </div>
+          <strong id="learn-mastery-text" style="color: #38bdf8;">0%</strong>
+        </div>
+
+        <div>
+          <button id="add-all-chapter-btn" class="pill-btn" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); padding: 0.5rem 1rem;">
+            📥 Add All Chapter Words to Review
+          </button>
+        </div>
+      </div>
+
+      <!-- 3D Flip Flashcard Stage -->
+      <div id="flashcard-stage" class="flashcard-stage" title="Click or press Space to flip">
+        <div id="flashcard-inner" class="flashcard-inner">
+          
+          <!-- Front Face -->
+          <div class="flashcard-front">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="fc-lesson-badge" class="badge badge-lesson">Lesson 1</span>
+              <button id="fc-audio-btn" class="audio-btn" style="margin: 0; padding: 0.3rem 0.7rem;">🔊 Audio</button>
+            </div>
+            
+            <div class="flashcard-center">
+              <div id="fc-kanji" class="flashcard-kanji">私</div>
+              <div id="fc-kana" class="flashcard-kana">わたし</div>
+              <div id="fc-romaji" class="flashcard-romaji">watashi</div>
+            </div>
+
+            <div class="flashcard-flip-hint">⇄ Click or Press Space to Flip to Meaning</div>
+          </div>
+
+          <!-- Back Face -->
+          <div class="flashcard-back">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="fc-pos-badge" class="badge" style="background: rgba(255, 255, 255, 0.1); color: #cbd5e1;">noun</span>
+              <span style="font-size: 0.8rem; color: #a5b4fc;">English &amp; Context</span>
+            </div>
+
+            <div class="flashcard-center">
+              <div id="fc-meaning" class="flashcard-meaning">I; me</div>
+              <div style="background: rgba(0,0,0,0.3); border-left: 3px solid #38bdf8; padding: 0.6rem 0.85rem; border-radius: 4px; text-align: left; margin-top: 0.75rem;">
+                <div id="fc-example-ja" style="font-size: 0.95rem; color: #f8fafc; font-weight: 500;">私はマイク・ミラーです。</div>
+                <div id="fc-example-en" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">I am Mike Miller.</div>
+              </div>
+            </div>
+
+            <div class="flashcard-flip-hint">⇄ Click to Flip Back to Kanji</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Flashcard Bottom Action Bar -->
+      <div class="card-nav-controls">
+        <button id="fc-prev-btn" class="btn-nav-arrow" title="Previous Word (Left Arrow)">←</button>
+        
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <span id="fc-index-indicator" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Word 1 of 20</span>
+          
+          <button id="fc-review-toggle-btn" class="btn-review-toggle">
+            <span id="fc-review-toggle-icon">📥</span>
+            <span id="fc-review-toggle-text">Add to Review Queue</span>
+          </button>
+        </div>
+
+        <button id="fc-next-btn" class="btn-nav-arrow" title="Next Word (Right Arrow)">→</button>
+      </div>
+
+      <!-- Chapter Words List Overview -->
+      <div class="chapter-table-card">
+        <div class="chapter-table-header">
+          <h3 id="chapter-list-title" style="font-size: 1.05rem; font-weight: 700;">Lesson 1 Vocabulary List</h3>
+          <span id="chapter-list-count" style="font-size: 0.85rem; color: var(--text-muted);">20 Words</span>
+        </div>
+        <div id="chapter-words-grid" class="words-table-grid">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================== 2. REVIEW (QUIZ) VIEW ==================== -->
+    <section id="quiz-view" class="view-section">
       <div class="quiz-container">
         
         <!-- Live Session Stats Bar -->
         <div class="stats-bar">
-          <div class="streak-badge">
-            <span id="streak-display">🔥 0 Streak</span>
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <span id="quiz-streak-display" style="color: var(--accent-gold); font-weight: 700;">🔥 0 Streak</span>
+            <span style="color: var(--text-muted);">Queue: <strong id="quiz-queue-count" style="color: #38bdf8;">0</strong> words</span>
           </div>
           <div style="color: var(--text-muted);">
             Session Reviews: <strong id="session-count" style="color: #fff;">0</strong>
           </div>
         </div>
 
-        <!-- The Flashcard / Recall Stage -->
+        <!-- The Recall Card Stage -->
         <div class="card-stage">
-          <div class="card-top-meta">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <span id="level-badge" class="badge badge-n5">N5</span>
-              <span id="pos-badge" class="badge badge-pos">verb</span>
+              <span id="quiz-lesson-badge" class="badge badge-lesson">Lesson 1</span>
+              <span id="quiz-pos-badge" class="badge" style="background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">noun</span>
             </div>
-            <div id="star-rating" class="star-rating-display">
-              <!-- Dynamically rendered stars -->
+            <div id="quiz-star-rating" class="star-rating-display">
+              <!-- Rendered 5 stars -->
             </div>
           </div>
 
           <div class="prompt-japanese">
-            <div id="prompt-kanji" class="prompt-kanji">食べる</div>
-            <div id="prompt-kana" class="prompt-kana">たべる</div>
-            <div id="prompt-romaji" class="prompt-romaji">taberu</div>
+            <div id="quiz-prompt-kanji" class="prompt-kanji">私</div>
+            <div id="quiz-prompt-kana" class="prompt-kana">わたし</div>
+            <div id="quiz-prompt-romaji" class="prompt-romaji">watashi</div>
           </div>
 
-          <button id="audio-btn" class="audio-btn" title="Listen to Japanese pronunciation">
+          <button id="quiz-audio-btn" class="audio-btn" title="Listen to Japanese pronunciation">
             <span>🔊 Pronounce</span>
           </button>
         </div>
 
         <!-- 4 MCQ Options Grid -->
-        <div id="options-grid" class="options-grid">
+        <div id="quiz-options-grid" class="options-grid">
           <!-- Dynamically populated buttons -->
         </div>
 
         <!-- Instant Feedback Card -->
-        <div id="feedback-card" class="feedback-card">
-          <div class="feedback-header">
-            <div id="feedback-status" class="feedback-status correct">✓ Correct Recall!</div>
-            <div id="feedback-change" class="feedback-change-pill change-plus">⭐ 1 → ⭐ 2 (+1 Star)</div>
+        <div id="quiz-feedback-card" class="feedback-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <div id="quiz-feedback-status" style="font-size: 1.1rem; font-weight: 700;">✓ Correct Recall!</div>
+            <div id="quiz-feedback-change" class="badge" style="padding: 0.25rem 0.75rem;">⭐ 1 → ⭐ 2 (+1 Star)</div>
           </div>
 
-          <div class="example-box">
-            <div id="example-ja" class="example-ja">毎朝パンを食べます。</div>
-            <div id="example-en" class="example-en">I eat bread every morning.</div>
+          <div style="background: rgba(0, 0, 0, 0.25); border-left: 3px solid var(--accent-blue); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1rem;">
+            <div id="quiz-example-ja" style="font-size: 1rem; font-weight: 500; color: #e2e8f0; margin-bottom: 0.25rem;"></div>
+            <div id="quiz-example-en" style="font-size: 0.85rem; color: var(--text-muted);"></div>
           </div>
 
           <!-- AI Sentence & Grammar Breakdown -->
@@ -106,11 +199,11 @@
             <div id="ai-mnemonic" style="color: #fde047; font-weight: 500;"></div>
           </div>
 
-          <div class="next-action-bar" style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
             <button id="ai-explain-btn" class="pill-btn" style="background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); padding: 0.5rem 1rem;">
               ✨ AI Context &amp; Mnemonic
             </button>
-            <button id="next-btn" class="btn-primary">
+            <button id="quiz-next-btn" class="btn-primary">
               <span>Next Word</span>
               <span style="font-size: 0.8rem; opacity: 0.75; font-weight: 400;">[Enter ↵]</span>
             </button>
@@ -120,38 +213,36 @@
       </div>
     </section>
 
-    <!-- 2. DECK BROWSER VIEW -->
-    <section id="browse-view" class="view-section">
-      <div class="deck-controls">
-        <input type="text" id="search-input" class="search-input" placeholder="Search kanji, kana, romaji, or meaning (e.g. eat, 勉強)...">
-        <select id="star-filter" class="search-input" style="max-width: 170px;">
-          <option value="">All Mastery Stars</option>
-          <option value="1">⭐ 1 Star (Unfamiliar)</option>
-          <option value="2">⭐⭐ 2 Stars (Learning)</option>
-          <option value="3">⭐⭐⭐ 3 Stars (Familiar)</option>
-          <option value="4">⭐⭐⭐⭐ 4 Stars (Strong)</option>
-          <option value="5">⭐⭐⭐⭐⭐ 5 Stars (Mastered)</option>
-        </select>
+    <!-- ==================== 3. ROADMAP VIEW (Lessons 1-25) ==================== -->
+    <section id="roadmap-view" class="view-section">
+      <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h2 style="font-size: 1.35rem; font-weight: 800;">Minna no Nihongo Curriculum Path</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+            Master each chapter with at least <strong>75% star recall</strong> to unlock the next lesson.
+          </p>
+        </div>
       </div>
-      <div id="words-grid" class="words-grid">
-        <!-- Dynamically rendered word cards -->
+
+      <div id="roadmap-grid" class="roadmap-grid">
+        <!-- Dynamically rendered 25 chapter cards -->
       </div>
     </section>
 
-    <!-- 3. ANALYTICS & PROGRESS VIEW -->
+    <!-- ==================== 4. ANALYTICS VIEW ==================== -->
     <section id="analytics-view" class="view-section">
       <div class="analytics-grid">
         <div class="metric-card">
           <div class="metric-label">Total Vocabulary</div>
-          <div id="metric-total" class="metric-val">50</div>
+          <div id="metric-total" class="metric-val">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">In Review Queue</div>
+          <div id="metric-in-review" class="metric-val" style="color: #38bdf8;">0</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">Mastered (5★)</div>
           <div id="metric-mastered" class="metric-val" style="color: var(--accent-gold);">0</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">In Learning (2-4★)</div>
-          <div id="metric-learning" class="metric-val" style="color: #38bdf8;">0</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">Overall Accuracy</div>
@@ -159,8 +250,8 @@
         </div>
       </div>
 
-      <div class="chart-card">
-        <h3>5-Star Mastery Distribution</h3>
+      <div class="chapter-table-card" style="margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1.05rem; margin-bottom: 1rem;">5-Star Retention Distribution</h3>
         <div id="star-bars-container">
           <!-- Dynamically populated star distribution rows -->
         </div>
@@ -168,12 +259,26 @@
 
       <div style="display: flex; justify-content: flex-end;">
         <button id="reset-btn" class="pill-btn" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.6rem 1.25rem;">
-          ⚠️ Reset Deck Progress to 1 Star
+          ⚠️ Reset Progress &amp; Review Queue
         </button>
       </div>
     </section>
 
   </main>
+
+  <!-- ==================== UNLOCK CELEBRATION MODAL ==================== -->
+  <div id="unlock-modal" class="unlock-modal">
+    <div class="unlock-box">
+      <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎉 🔓</div>
+      <h2 style="font-size: 1.5rem; font-weight: 800; color: #a7f3d0; margin-bottom: 0.5rem;">おめでとう！ Lesson Unlocked!</h2>
+      <p id="unlock-modal-message" style="color: #cbd5e1; font-size: 0.95rem; margin-bottom: 1.5rem;">
+        You achieved 75%+ mastery in Lesson 1! Lesson 2 is now available to learn.
+      </p>
+      <button id="unlock-modal-close-btn" class="btn-primary" style="margin: 0 auto; padding: 0.75rem 2rem;">
+        Go to New Lesson →
+      </button>
+    </div>
+  </div>
 
   <script src="/static/js/app.js"></script>
 </body>

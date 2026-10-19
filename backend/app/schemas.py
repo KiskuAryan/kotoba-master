@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 # --- Word Schemas ---
 class WordBase(BaseModel):
+    lesson_number: int = 1
+    book_title: str = "Minna no Nihongo I"
     kanji: Optional[str] = None
     kana: str
     romaji: str
@@ -21,6 +23,8 @@ class ProgressOut(BaseModel):
 
     id: int
     word_id: int
+    is_in_review: bool
+    learned_at: Optional[datetime] = None
     star_rating: int = Field(ge=1, le=5)
     correct_streak: int
     total_attempts: int
@@ -34,9 +38,31 @@ class WordOut(WordBase):
     id: int
     progress: Optional[ProgressOut] = None
 
+# --- Chapter / Lesson Schemas ---
+class ChapterOut(BaseModel):
+    lesson_number: int
+    title: str
+    description: Optional[str] = None
+    is_unlocked: bool
+    total_words: int
+    words_in_review: int
+    mastery_percentage: float
+    can_unlock: bool
+
+# --- Review Queue Schemas ---
+class ToggleReviewRequest(BaseModel):
+    word_id: int
+    is_in_review: bool = True
+
+class ToggleReviewResponse(BaseModel):
+    word_id: int
+    is_in_review: bool
+    message: str
+
 # --- Quiz Schemas ---
 class QuizQuestionOut(BaseModel):
     word_id: int
+    lesson_number: int
     prompt_kanji: Optional[str] = None
     prompt_kana: str
     romaji: str
@@ -57,17 +83,20 @@ class QuizAnswerResult(BaseModel):
     star_rating_after: int
     correct_streak: int
     star_change: int
+    chapter_unlocked: Optional[int] = None  # lesson_number if this answer unlocked next chapter
     example_ja: Optional[str] = None
     example_en: Optional[str] = None
 
 # --- Deck & Statistics Schemas ---
 class DeckStats(BaseModel):
     total_words: int
+    words_in_review: int
     mastered_count: int      # 5 stars
     familiar_count: int      # 3-4 stars
     learning_count: int      # 2 stars
     unfamiliar_count: int    # 1 star
     overall_accuracy: float
     total_reviews_done: int
-    star_distribution: Dict[int, int]  # {1: X, 2: Y, 3: Z, 4: W, 5: V}
-    level_counts: Dict[str, int]       # {"N5": X, "N4": Y}
+    star_distribution: Dict[int, int]
+    level_counts: Dict[str, int]
+    chapter_mastery: Dict[int, float]

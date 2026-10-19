@@ -11,9 +11,11 @@ router = APIRouter(prefix="/words", tags=["Words"])
 @router.get("", response_model=List[WordOut])
 def list_words(
     level: Optional[str] = Query(None, description="Filter by JLPT level: 'N5' or 'N4'"),
+    lesson: Optional[int] = Query(None, description="Filter by Minna no Nihongo Lesson (1-25)"),
+    in_review: Optional[bool] = Query(None, description="Filter by review queue status"),
     stars: Optional[int] = Query(None, ge=1, le=5, description="Filter by star rating (1-5)"),
     search: Optional[str] = Query(None, description="Search term for kanji, kana, romaji, or meaning"),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
 ):
@@ -22,6 +24,12 @@ def list_words(
 
     if level:
         query = query.filter(Word.jlpt_level == level)
+
+    if lesson:
+        query = query.filter(Word.lesson_number == lesson)
+
+    if in_review is not None:
+        query = query.filter(UserProgress.is_in_review == in_review)
 
     if stars:
         query = query.filter(UserProgress.star_rating == stars)

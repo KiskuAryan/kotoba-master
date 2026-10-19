@@ -71,13 +71,13 @@ def test_weighted_sampling_distribution(db_session):
     word_a = Word(kana="ことばA", romaji="kotobaA", meaning="meaning A", jlpt_level="N5", part_of_speech="noun")
     db_session.add(word_a)
     db_session.flush()
-    db_session.add(UserProgress(word_id=word_a.id, star_rating=1))
+    db_session.add(UserProgress(word_id=word_a.id, star_rating=1, is_in_review=True))
 
     # Create word B (5 Stars, weight=0.2)
     word_b = Word(kana="ことばB", romaji="kotobaB", meaning="meaning B", jlpt_level="N5", part_of_speech="noun")
     db_session.add(word_b)
     db_session.flush()
-    db_session.add(UserProgress(word_id=word_b.id, star_rating=5))
+    db_session.add(UserProgress(word_id=word_b.id, star_rating=5, is_in_review=True))
     db_session.commit()
 
     samples_a = 0

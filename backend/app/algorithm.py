@@ -62,15 +62,23 @@ def update_mastery_rating(
 def select_weighted_word(
     db: Session,
     jlpt_level: Optional[str] = None,
+    lesson_number: Optional[int] = None,
+    only_in_review: bool = True,
     exclude_ids: Optional[List[int]] = None
 ) -> Optional[Word]:
     """
     Selects a Word using inverse-weighted random distribution based on its star rating.
-    Allows filtering by JLPT level and excluding recently presented word IDs.
+    Only pulls from words added to the review queue if only_in_review=True.
     """
     query = db.query(Word, UserProgress.star_rating).join(
         UserProgress, Word.id == UserProgress.word_id
     )
+
+    if only_in_review:
+        query = query.filter(UserProgress.is_in_review == True)
+
+    if lesson_number:
+        query = query.filter(Word.lesson_number == lesson_number)
 
     if jlpt_level:
         query = query.filter(Word.jlpt_level == jlpt_level)

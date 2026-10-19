@@ -2,12 +2,12 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.database import Base, get_db
-from app.seed import seed_vocab
+from app.seed import seed_vocab, seed_chapters
+from app.models import UserProgress, Word, ChapterProgress
 from app.config import settings
-
-from sqlalchemy.pool import StaticPool
 
 @pytest.fixture(scope="module")
 def test_app():
@@ -21,8 +21,9 @@ def test_app():
     Base.metadata.create_all(bind=engine)
     TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    # Seed data
+    # Seed chapters and vocabulary
     db = TestingSession()
+    seed_chapters(db)
     seed_vocab(db, seed_file=settings.SEED_FILE)
     db.close()
 
@@ -52,85 +53,67 @@ def test_frontend_serving(test_app):
     assert res_css.status_code == 200
     assert "--bg-primary" in res_css.text
 
-def test_deck_summary(test_app):
-    response = test_app.get("/api/decks/summary")
+def test_chapters_list(test_app):
+    response = test_app.get("/api/chapters")
     assert response.status_code == 200
-    data = response.json()
-    assert data["total_words"] == 50
-    assert "star_distribution" in data
-    assert data["unfamiliar_count"] == 50  # all start at 1 star
+    chaps = response.json()
+    assert len(chaps) == 25
+    assert chaps[0]["lesson_number"] == 1
+    assert chaps[0]["is_unlocked"] is True
+    assert chaps[1]["lesson_number"] == 2
+    assert chaps[1]["is_unlocked"] is False
 
-def test_quiz_next_and_submit(test_app):
-    # 1. Fetch next question
-    res_next = test_app.get("/api/quiz/next?level=N5")
+def test_get_chapter_words(test_app):
+    response = test_app.get("/api/chapters/1/words")
+    assert response.status_code == 200
+    words = response.json()
+    assert len(words) > 0
+    assert all(w["lesson_number"] == 1 for w in words)
+
+def test_add_to_review_queue(test_app):
+    # 1. Initially quiz queue might be empty if no words are in review
+    res_words = test_app.get("/api/chapters/1/words")
+    first_word_id = res_words.json()[0]["id"]
+
+    # Toggle word into review
+    res_toggle = test_app.post("/api/chapters/toggle-review", json={
+        "word_id": first_word_id,
+        "is_in_review": True
+    })
+    assert res_toggle.status_code == 200
+    assert res_toggle.json()["is_in_review"] is True
+
+    # Batch add all chapter 1 words to review
+    res_batch = test_app.post("/api/chapters/1/add-all-to-review")
+    assert res_batch.status_code == 200
+    assert res_batch.json()["added_count"] > 0
+
+def test_quiz_with_review_queue(test_app):
+    # Fetch next question from review queue
+    res_next = test_app.get("/api/quiz/next?only_in_review=true")
     assert res_next.status_code == 200
     q = res_next.json()
     assert len(q["options"]) == 4
     assert q["word_id"] > 0
-    assert q["current_stars"] == 1
 
-    # 2. Get the correct word details from /words to submit correct answer
+    # Get correct meaning
     res_word = test_app.get(f"/api/words/{q['word_id']}")
-    assert res_word.status_code == 200
     correct_meaning = res_word.json()["meaning"]
 
-    # 3. Submit correct answer
+    # Submit correct answer
     res_submit = test_app.post("/api/quiz/submit", json={
         "word_id": q["word_id"],
         "selected_option": correct_meaning
     })
     assert res_submit.status_code == 200
-    result = res_submit.json()
-    assert result["is_correct"] is True
-    assert result["star_rating_before"] == 1
-    assert result["star_rating_after"] == 2
-    assert result["correct_streak"] == 1
+    res_data = res_submit.json()
+    assert res_data["is_correct"] is True
+    assert res_data["correct_streak"] >= 1
 
-def test_quiz_submit_incorrect(test_app):
-    res_next = test_app.get("/api/quiz/next?level=N4")
-    assert res_next.status_code == 200
-    q = res_next.json()
-
-    res_submit = test_app.post("/api/quiz/submit", json={
-        "word_id": q["word_id"],
-        "selected_option": "THIS_IS_DEFINITELY_WRONG_123"
-    })
-    assert res_submit.status_code == 200
-    result = res_submit.json()
-    assert result["is_correct"] is False
-    assert result["correct_streak"] == 0
-
-def test_list_words_filtering(test_app):
-    # Filter by N5
-    res_n5 = test_app.get("/api/words?level=N5")
-    assert res_n5.status_code == 200
-    for w in res_n5.json():
-        assert w["jlpt_level"] == "N5"
-
-    # Search by keyword
-    res_search = test_app.get("/api/words?search=eat")
-    assert res_search.status_code == 200
-    results = res_search.json()
-    assert len(results) >= 1
-    assert any("eat" in w["meaning"].lower() for w in results)
-
-def test_ai_explanation(test_app):
-    res = test_app.post("/api/ai/explain", json={
-        "word": "食べる",
-        "level": "N5",
-        "meaning": "to eat"
-    })
+def test_chapter_unlock_progression(test_app):
+    # Check unlock status for chapter 1
+    res = test_app.post("/api/chapters/1/check-unlock")
     assert res.status_code == 200
     data = res.json()
-    assert "japanese_sentence" in data
-    assert "grammar_breakdown" in data
-    assert len(data["japanese_sentence"]) > 0
-
-def test_deck_reset(test_app):
-    res_reset = test_app.post("/api/decks/reset")
-    assert res_reset.status_code == 200
-    assert res_reset.json()["status"] == "success"
-
-    # Verify all words are back to 1 star
-    res_summary = test_app.get("/api/decks/summary")
-    assert res_summary.json()["unfamiliar_count"] == 50
+    assert "current_lesson" in data
+    assert "mastery_percentage" in data

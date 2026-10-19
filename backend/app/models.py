@@ -17,12 +17,14 @@ class Word(Base):
     __tablename__ = "words"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    lesson_number = Column(Integer, nullable=False, default=1, index=True)  # Minna no Nihongo Lesson 1-25
+    book_title = Column(String(50), nullable=False, default="Minna no Nihongo I")
     kanji = Column(String(100), nullable=True, index=True)
     kana = Column(String(100), nullable=False, index=True)
     romaji = Column(String(100), nullable=False)
     meaning = Column(String(255), nullable=False)
-    jlpt_level = Column(String(10), nullable=False, index=True)  # e.g., 'N5', 'N4'
-    part_of_speech = Column(String(50), nullable=False, index=True)  # 'noun', 'verb', 'adjective', etc.
+    jlpt_level = Column(String(10), nullable=False, index=True)  # 'N5', 'N4'
+    part_of_speech = Column(String(50), nullable=False, index=True)
     example_ja = Column(Text, nullable=True)
     example_en = Column(Text, nullable=True)
 
@@ -31,7 +33,7 @@ class Word(Base):
     quiz_logs = relationship("QuizLog", back_populates="word", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Word(id={self.id}, kanji='{self.kanji}', kana='{self.kana}', meaning='{self.meaning}', level='{self.jlpt_level}')>"
+        return f"<Word(id={self.id}, L{self.lesson_number}, '{self.kana}', '{self.meaning}')>"
 
 
 class UserProgress(Base):
@@ -40,6 +42,10 @@ class UserProgress(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     word_id = Column(Integer, ForeignKey("words.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     
+    # Study & Review Queue Status (AHA Lab style two-stage flow)
+    is_in_review = Column(Boolean, nullable=False, default=False, index=True)
+    learned_at = Column(DateTime(timezone=True), nullable=True)
+
     # 5-Star mastery rating: 1 (Unfamiliar) to 5 (Mastered)
     star_rating = Column(Integer, nullable=False, default=1, index=True)
     correct_streak = Column(Integer, nullable=False, default=0)
@@ -63,7 +69,21 @@ class UserProgress(Base):
         return round((self.correct_attempts / self.total_attempts) * 100, 1)
 
     def __repr__(self):
-        return f"<UserProgress(word_id={self.word_id}, stars={self.star_rating}, streak={self.correct_streak})>"
+        return f"<UserProgress(word_id={self.word_id}, in_review={self.is_in_review}, stars={self.star_rating})>"
+
+
+class ChapterProgress(Base):
+    __tablename__ = "chapter_progress"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    lesson_number = Column(Integer, unique=True, nullable=False, index=True)  # 1 to 25
+    title = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    is_unlocked = Column(Boolean, nullable=False, default=False)
+    unlocked_at = Column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self):
+        return f"<ChapterProgress(L{self.lesson_number}, unlocked={self.is_unlocked})>"
 
 
 class QuizLog(Base):
