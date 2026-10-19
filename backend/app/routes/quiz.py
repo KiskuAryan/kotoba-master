@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from app.database import get_db
-from app.models import Word, UserProgress, QuizLog, ChapterProgress
+from app.models import Word, UserProgress, QuizLog, ChapterProgress, User
+from app.auth import get_current_user_optional
 from app.schemas import (
     QuizQuestionOut,
     QuizAnswerSubmit,
@@ -25,14 +26,18 @@ router = APIRouter(prefix="/quiz", tags=["Quiz"])
 @router.get("/status", response_model=QuizStatusOut)
 def get_quiz_status(
     lesson: Optional[int] = Query(None, description="Optional lesson filter"),
+    user: User = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
     Returns review queue status: how many words are due, how many in queue,
-    and minutes until the next scheduled review.
+    and minutes until the next scheduled review for this user.
     """
     now = datetime.now(timezone.utc)
-    base_query = db.query(UserProgress).filter(UserProgress.is_in_review == True)
+    base_query = db.query(UserProgress).filter(
+        UserProgress.user_id == user.id,
+        UserProgress.is_in_review == True
+    )
     if lesson:
         w_ids = db.query(Word.id).filter(Word.lesson_number == lesson).subquery()
         base_query = base_query.filter(UserProgress.word_id.in_(w_ids))
@@ -69,6 +74,7 @@ def start_quiz_session(
     size: int = Query(10, ge=3, le=50, description="Session size (e.g. 5, 10, 20 words)"),
     lesson: Optional[int] = Query(None, description="Filter by Minna no Nihongo Lesson"),
     interleave: bool = Query(True, description="Interleave retention checks from previous chapters"),
+    user: User = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -83,7 +89,8 @@ def start_quiz_session(
         db,
         session_size=size,
         lesson_number=lesson,
-        include_retention_interleaving=interleave
+        include_retention_interleaving=interleave,
+        user_id=user.id
     )
 
     if not words:
@@ -94,7 +101,8 @@ def start_quiz_session(
 
     questions = []
     for word in words:
-        stars = word.progress.star_rating if word.progress else 1
+        up = db.query(UserProgress).filter_by(user_id=user.id, word_id=word.id).first()
+        stars = up.star_rating if up else 1
         options = generate_mcq_options(db, word)
         is_retention = getattr(word, "is_retention_check", False)
         questions.append(QuizQuestionOut(
@@ -124,6 +132,7 @@ def get_next_question(
     lesson: Optional[int] = Query(None),
     only_in_review: bool = Query(True),
     exclude: Optional[str] = Query(None),
+    user: User = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """Fallback single-question endpoint for quick ad-hoc review."""
@@ -139,11 +148,15 @@ def get_next_question(
         jlpt_level=level,
         lesson_number=lesson,
         only_in_review=only_in_review,
-        exclude_ids=exclude_ids
+        exclude_ids=exclude_ids,
+        user_id=user.id
     )
 
     if not target_word:
-        total_in_review = db.query(UserProgress).filter(UserProgress.is_in_review == True).count()
+        total_in_review = db.query(UserProgress).filter(
+            UserProgress.user_id == user.id,
+            UserProgress.is_in_review == True
+        ).count()
         if total_in_review == 0 and only_in_review:
             raise HTTPException(
                 status_code=404,
@@ -151,7 +164,8 @@ def get_next_question(
             )
         raise HTTPException(status_code=404, detail="No matching vocabulary words found.")
 
-    stars = target_word.progress.star_rating if target_word.progress else 1
+    up = db.query(UserProgress).filter_by(user_id=user.id, word_id=target_word.id).first()
+    stars = up.star_rating if up else 1
     options = generate_mcq_options(db, target_word)
 
     return QuizQuestionOut(
@@ -170,6 +184,7 @@ def get_next_question(
 @router.post("/submit", response_model=QuizAnswerResult)
 def submit_quiz_answer(
     submission: QuizAnswerSubmit,
+    user: User = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -180,9 +195,9 @@ def submit_quiz_answer(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found.")
 
-    progress = db.query(UserProgress).filter(UserProgress.word_id == word.id).first()
+    progress = db.query(UserProgress).filter_by(user_id=user.id, word_id=word.id).first()
     if not progress:
-        progress = UserProgress(word_id=word.id, star_rating=1, is_in_review=True)
+        progress = UserProgress(user_id=user.id, word_id=word.id, star_rating=1, is_in_review=True)
         db.add(progress)
         db.flush()
 
@@ -209,6 +224,7 @@ def submit_quiz_answer(
 
     # Log quiz history
     quiz_log = QuizLog(
+        user_id=user.id,
         word_id=word.id,
         selected_meaning=submission.selected_option,
         is_correct=is_correct,
@@ -221,13 +237,14 @@ def submit_quiz_answer(
     # Check Chapter Unlock
     chapter_unlocked = None
     lesson_num = word.lesson_number
-    next_chap = db.query(ChapterProgress).filter_by(lesson_number=lesson_num + 1).first()
+    next_chap = db.query(ChapterProgress).filter_by(user_id=user.id, lesson_number=lesson_num + 1).first()
 
     if next_chap and not next_chap.is_unlocked:
         lesson_words = db.query(Word.id).filter(Word.lesson_number == lesson_num).all()
         if lesson_words:
             w_ids = [w[0] for w in lesson_words]
             total_stars = db.query(func.sum(UserProgress.star_rating)).filter(
+                UserProgress.user_id == user.id,
                 UserProgress.word_id.in_(w_ids)
             ).scalar() or 0
             max_stars = len(w_ids) * 5

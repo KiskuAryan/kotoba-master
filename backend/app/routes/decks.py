@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
-from app.models import Word, UserProgress, QuizLog, ChapterProgress
+from app.models import Word, UserProgress, QuizLog, ChapterProgress, User
+from app.auth import get_current_user_optional
 from app.schemas import DeckStats
 
 router = APIRouter(prefix="/decks", tags=["Decks"])
@@ -11,13 +12,17 @@ router = APIRouter(prefix="/decks", tags=["Decks"])
 @router.get("/summary", response_model=DeckStats)
 def get_deck_summary(
     level: Optional[str] = Query(None, description="Optional filter by 'N5' or 'N4'"),
+    user: User = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
     Computes overall statistics: total count, words in review,
-    star rating breakdown, accuracy percentage, and chapter mastery.
+    star rating breakdown, accuracy percentage, and chapter mastery for the current user.
     """
-    query = db.query(Word, UserProgress).join(UserProgress, Word.id == UserProgress.word_id)
+    query = db.query(Word, UserProgress).join(
+        UserProgress,
+        (Word.id == UserProgress.word_id) & (UserProgress.user_id == user.id)
+    )
     if level:
         query = query.filter(Word.jlpt_level == level)
 
@@ -92,10 +97,11 @@ def get_deck_summary(
 @router.post("/reset")
 def reset_progress(
     level: Optional[str] = Query(None, description="Reset only 'N5' or 'N4', or all if omitted"),
+    user: User = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
-    """Resets all star ratings, streaks, and review queue status."""
-    query = db.query(UserProgress)
+    """Resets all star ratings, streaks, and review queue status for the current user."""
+    query = db.query(UserProgress).filter(UserProgress.user_id == user.id)
     if level:
         word_ids = db.query(Word.id).filter(Word.jlpt_level == level).subquery()
         query = query.filter(UserProgress.word_id.in_(word_ids))

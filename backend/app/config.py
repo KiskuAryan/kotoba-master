@@ -10,5 +10,8 @@ class Settings:
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/kotoba.db")
     SEED_FILE: Path = DATA_DIR / "minna_vocab.json"
     CORS_ORIGINS: list = ["*"]
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "kotoba-master-super-secret-jwt-key-change-in-production-32chars")
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_DAYS: int = 30
 
 settings = Settings()

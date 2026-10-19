@@ -76,7 +76,8 @@ def build_review_session(
     db: Session,
     session_size: int = 10,
     lesson_number: Optional[int] = None,
-    include_retention_interleaving: bool = True
+    include_retention_interleaving: bool = True,
+    user_id: Optional[int] = None
 ) -> Tuple[List[Word], bool, int]:
     """
     Constructs a finite review batch (AHA Lab style with cumulative interleaving):
@@ -90,6 +91,7 @@ def build_review_session(
          from higher-star words (~25%) so mastered words are periodically refreshed.
     3. Each word appears strictly ONCE per session (no duplicates).
     4. Words are shuffled so retention checks are naturally interleaved throughout the quiz.
+    5. Scoped to user_id if provided.
     Returns: (session_words, is_early_practice, total_due_count)
     """
     now = datetime.now(timezone.utc)
@@ -101,6 +103,9 @@ def build_review_session(
     base_scope = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
         UserProgress.is_in_review == True
     )
+    if user_id:
+        base_scope = base_scope.filter(UserProgress.user_id == user_id)
+
     if lesson_number:
         scope_due_count = base_scope.filter(
             Word.lesson_number == lesson_number,
@@ -132,6 +137,9 @@ def build_review_session(
                 UserProgress.is_in_review == True,
                 UserProgress.star_rating >= 3
             )
+
+        if user_id:
+            prev_scope = prev_scope.filter(UserProgress.user_id == user_id)
 
         # 1a. Prioritize older words that are DUE first (star >= 3)
         due_retention = prev_scope.filter(
@@ -184,6 +192,8 @@ def build_review_session(
     primary_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
         UserProgress.is_in_review == True
     )
+    if user_id:
+        primary_query = primary_query.filter(UserProgress.user_id == user_id)
     if lesson_number:
         primary_query = primary_query.filter(Word.lesson_number == lesson_number)
     if selected_ids:
@@ -224,6 +234,8 @@ def build_review_session(
         topup_query = db.query(Word).join(UserProgress, Word.id == UserProgress.word_id).filter(
             UserProgress.is_in_review == True
         )
+        if user_id:
+            topup_query = topup_query.filter(UserProgress.user_id == user_id)
         if selected_ids:
             topup_query = topup_query.filter(~Word.id.in_(selected_ids))
         topup_words = topup_query.order_by(
@@ -257,12 +269,16 @@ def select_weighted_word(
     jlpt_level: Optional[str] = None,
     lesson_number: Optional[int] = None,
     only_in_review: bool = True,
-    exclude_ids: Optional[List[int]] = None
+    exclude_ids: Optional[List[int]] = None,
+    user_id: Optional[int] = None
 ) -> Optional[Word]:
     """Fallback single-word weighted selector."""
     query = db.query(Word, UserProgress.star_rating).join(
         UserProgress, Word.id == UserProgress.word_id
     )
+
+    if user_id:
+        query = query.filter(UserProgress.user_id == user_id)
 
     if only_in_review:
         query = query.filter(UserProgress.is_in_review == True)

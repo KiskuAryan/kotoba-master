@@ -9,6 +9,9 @@ const state = {
   isCardFlipped: false,
   reviewQueueCount: 0,
   
+  token: localStorage.getItem("kotoba_token") || null,
+  user: null,
+  
   // Quiz Session State
   session: {
     active: false,
@@ -22,6 +25,15 @@ const state = {
   },
   isQuizSubmitting: false
 };
+
+// Authenticated fetch wrapper
+async function apiFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers || {});
+  if (state.token) {
+    headers["Authorization"] = `Bearer ${state.token}`;
+  }
+  return fetch(url, { ...options, headers });
+}
 
 // --- DOM Cache ---
 const els = {
@@ -125,7 +137,26 @@ const els = {
   // Unlock Modal
   unlockModal: document.getElementById("unlock-modal"),
   unlockModalMessage: document.getElementById("unlock-modal-message"),
-  unlockModalCloseBtn: document.getElementById("unlock-modal-close-btn")
+  unlockModalCloseBtn: document.getElementById("unlock-modal-close-btn"),
+
+  // User Auth Controls
+  authLoggedIn: document.getElementById("auth-logged-in"),
+  authLoggedOut: document.getElementById("auth-logged-out"),
+  currentUsername: document.getElementById("current-username"),
+  openAuthBtn: document.getElementById("open-auth-btn"),
+  logoutBtn: document.getElementById("logout-btn"),
+  authModal: document.getElementById("auth-modal"),
+  tabAuthLogin: document.getElementById("tab-auth-login"),
+  tabAuthRegister: document.getElementById("tab-auth-register"),
+  authErrorMsg: document.getElementById("auth-error-msg"),
+  loginForm: document.getElementById("login-form"),
+  registerForm: document.getElementById("register-form"),
+  loginUsername: document.getElementById("login-username"),
+  loginPassword: document.getElementById("login-password"),
+  regUsername: document.getElementById("reg-username"),
+  regEmail: document.getElementById("reg-email"),
+  regPassword: document.getElementById("reg-password"),
+  authModalCloseBtn: document.getElementById("auth-modal-close-btn")
 };
 
 // --- Japanese TTS ---
@@ -169,7 +200,7 @@ function renderStarIcons(starCount) {
 // ==================== 1. LEARN MODE (FLASHCARDS) ====================
 async function loadChaptersList() {
   try {
-    const res = await fetch("/api/chapters");
+    const res = await apiFetch("/api/chapters");
     state.chapters = await res.json();
     
     els.chapterSelect.innerHTML = "";
@@ -215,7 +246,7 @@ async function loadLesson(lessonNumber) {
   els.flashcardInner.classList.remove("flipped");
 
   try {
-    const res = await fetch(`/api/chapters/${lessonNumber}/words`);
+    const res = await apiFetch(`/api/chapters/${lessonNumber}/words`);
     state.chapterWords = await res.json();
     
     const currentChap = state.chapters.find(c => c.lesson_number === lessonNumber);
@@ -312,7 +343,7 @@ els.fcReviewToggleBtn.addEventListener("click", async (e) => {
   const newStatus = !currentStatus;
 
   try {
-    await fetch("/api/chapters/toggle-review", {
+    await apiFetch("/api/chapters/toggle-review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ word_id: word.id, is_in_review: newStatus })
@@ -329,7 +360,7 @@ els.fcReviewToggleBtn.addEventListener("click", async (e) => {
 
 els.addAllChapterBtn.addEventListener("click", async () => {
   try {
-    const res = await fetch(`/api/chapters/${state.selectedLesson}/add-all-to-review`, { method: "POST" });
+    const res = await apiFetch(`/api/chapters/${state.selectedLesson}/add-all-to-review`, { method: "POST" });
     const data = await res.json();
     
     state.chapterWords.forEach(w => {
@@ -396,7 +427,7 @@ async function loadReviewLobby() {
   const statusUrl = scope ? `/api/quiz/status?lesson=${scope}` : "/api/quiz/status";
 
   try {
-    const res = await fetch(statusUrl);
+    const res = await apiFetch(statusUrl);
     const status = await res.json();
 
     els.lobbyDueCount.textContent = status.due_count;
@@ -450,7 +481,7 @@ async function startReviewSession(isEarlyPractice = false) {
   }
   
   try {
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     if (!res.ok) {
       alert("Please add vocabulary to your Review Queue in the Learn section first!");
       switchTab("learn");
@@ -581,7 +612,7 @@ async function handleQuizSubmit(selectedOption, clickedBtn) {
   buttons.forEach(b => b.disabled = true);
 
   try {
-    const res = await fetch("/api/quiz/submit", {
+    const res = await apiFetch("/api/quiz/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -744,7 +775,7 @@ function triggerUnlockCelebration(unlockedLessonNumber) {
 async function loadRoadmap() {
   els.roadmapGrid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 2rem;">Loading curriculum map...</div>`;
   try {
-    const res = await fetch("/api/chapters");
+    const res = await apiFetch("/api/chapters");
     state.chapters = await res.json();
     els.roadmapGrid.innerHTML = "";
 
@@ -794,7 +825,7 @@ async function loadRoadmap() {
 // ==================== 4. ANALYTICS & PROGRESS ====================
 async function loadAnalytics() {
   try {
-    const res = await fetch("/api/decks/summary");
+    const res = await apiFetch("/api/decks/summary");
     const data = await res.json();
 
     els.metricTotal.textContent = data.total_words;
@@ -832,7 +863,7 @@ async function loadAnalytics() {
 
 async function refreshReviewBadge() {
   try {
-    const res = await fetch("/api/quiz/status");
+    const res = await apiFetch("/api/quiz/status");
     const data = await res.json();
     els.reviewBadgeCount.textContent = data.due_count || 0;
   } catch (err) {}
@@ -841,12 +872,191 @@ async function refreshReviewBadge() {
 if (els.resetBtn) {
   els.resetBtn.addEventListener("click", async () => {
     if (!confirm("Are you sure you want to reset all progress, star ratings, and review queues?")) return;
-    await fetch("/api/decks/reset", { method: "POST" });
+    await apiFetch("/api/decks/reset", { method: "POST" });
     loadAnalytics();
     refreshReviewBadge();
     loadLesson(state.selectedLesson);
     alert("Progress successfully reset!");
   });
+}
+
+// ==================== 5. USER AUTHENTICATION & MULTI-USER SYNC ====================
+function initAuth() {
+  if (els.openAuthBtn) {
+    els.openAuthBtn.addEventListener("click", () => showAuthModal("login"));
+  }
+
+  if (els.authModalCloseBtn) {
+    els.authModalCloseBtn.addEventListener("click", () => {
+      els.authModal.style.display = "none";
+    });
+  }
+
+  if (els.tabAuthLogin) {
+    els.tabAuthLogin.addEventListener("click", () => showAuthModal("login"));
+  }
+
+  if (els.tabAuthRegister) {
+    els.tabAuthRegister.addEventListener("click", () => showAuthModal("register"));
+  }
+
+  if (els.logoutBtn) {
+    els.logoutBtn.addEventListener("click", () => logoutUser());
+  }
+
+  if (els.loginForm) {
+    els.loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await handleLogin();
+    });
+  }
+
+  if (els.registerForm) {
+    els.registerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await handleRegister();
+    });
+  }
+}
+
+function showAuthModal(mode = "login") {
+  els.authModal.style.display = "flex";
+  els.authErrorMsg.style.display = "none";
+  if (mode === "login") {
+    els.loginForm.style.display = "block";
+    els.registerForm.style.display = "none";
+    els.tabAuthLogin.style.background = "rgba(99, 102, 241, 0.25)";
+    els.tabAuthLogin.style.color = "#c7d2fe";
+    els.tabAuthLogin.style.borderColor = "var(--accent-indigo)";
+    els.tabAuthRegister.style.background = "transparent";
+    els.tabAuthRegister.style.color = "var(--text-muted)";
+    els.tabAuthRegister.style.borderColor = "transparent";
+  } else {
+    els.loginForm.style.display = "none";
+    els.registerForm.style.display = "block";
+    els.tabAuthRegister.style.background = "rgba(16, 185, 129, 0.25)";
+    els.tabAuthRegister.style.color = "#a7f3d0";
+    els.tabAuthRegister.style.borderColor = "var(--accent-green)";
+    els.tabAuthLogin.style.background = "transparent";
+    els.tabAuthLogin.style.color = "var(--text-muted)";
+    els.tabAuthLogin.style.borderColor = "transparent";
+  }
+}
+
+async function checkAuthStatus() {
+  if (!state.token) {
+    renderAuthUI(null);
+    return;
+  }
+
+  try {
+    const res = await apiFetch("/api/auth/me");
+    if (res.ok) {
+      const user = await res.json();
+      state.user = user;
+      renderAuthUI(user);
+    } else {
+      localStorage.removeItem("kotoba_token");
+      state.token = null;
+      state.user = null;
+      renderAuthUI(null);
+    }
+  } catch (err) {
+    console.error("Auth check error:", err);
+  }
+}
+
+function renderAuthUI(user) {
+  if (user) {
+    els.authLoggedIn.style.display = "flex";
+    els.authLoggedOut.style.display = "none";
+    els.currentUsername.textContent = user.username;
+  } else {
+    els.authLoggedIn.style.display = "none";
+    els.authLoggedOut.style.display = "flex";
+  }
+}
+
+async function handleLogin() {
+  const usernameOrEmail = els.loginUsername.value.trim();
+  const password = els.loginPassword.value;
+
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username_or_email: usernameOrEmail,
+        password: password
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      els.authErrorMsg.textContent = data.detail || "Login failed.";
+      els.authErrorMsg.style.display = "block";
+      return;
+    }
+
+    state.token = data.access_token;
+    state.user = data.user;
+    localStorage.setItem("kotoba_token", data.access_token);
+    renderAuthUI(data.user);
+    els.authModal.style.display = "none";
+    els.loginPassword.value = "";
+
+    await loadChaptersList();
+    await loadLesson(state.selectedLesson);
+    refreshReviewBadge();
+  } catch (err) {
+    els.authErrorMsg.textContent = "Network error. Please try again.";
+    els.authErrorMsg.style.display = "block";
+  }
+}
+
+async function handleRegister() {
+  const username = els.regUsername.value.trim();
+  const email = els.regEmail.value.trim();
+  const password = els.regPassword.value;
+
+  try {
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      els.authErrorMsg.textContent = data.detail || "Registration failed.";
+      els.authErrorMsg.style.display = "block";
+      return;
+    }
+
+    state.token = data.access_token;
+    state.user = data.user;
+    localStorage.setItem("kotoba_token", data.access_token);
+    renderAuthUI(data.user);
+    els.authModal.style.display = "none";
+    els.regPassword.value = "";
+
+    await loadChaptersList();
+    await loadLesson(1);
+    refreshReviewBadge();
+  } catch (err) {
+    els.authErrorMsg.textContent = "Network error. Please try again.";
+    els.authErrorMsg.style.display = "block";
+  }
+}
+
+async function logoutUser() {
+  localStorage.removeItem("kotoba_token");
+  state.token = null;
+  state.user = null;
+  renderAuthUI(null);
+  await loadChaptersList();
+  await loadLesson(1);
+  refreshReviewBadge();
 }
 
 // Global Keyboard Shortcuts
@@ -878,6 +1088,8 @@ window.addEventListener("keydown", (e) => {
 // Init on Load
 document.addEventListener("DOMContentLoaded", async () => {
   initNavigation();
+  initAuth();
+  await checkAuthStatus();
   await loadChaptersList();
   await loadLesson(1);
   refreshReviewBadge();

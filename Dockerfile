@@ -1,27 +1,23 @@
-# Multi-stage lightweight Dockerfile for KotobaMaster
-FROM python:3.11-slim as builder
-
-WORKDIR /build
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
-
-# Final Runtime Image
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy installed python dependencies from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
-ENV PYTHONPATH=/app/backend
+# Prevent Python from writing .pyc and buffer stdout
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/backend
 
-# Copy Application Code and Frontend Assets
-COPY backend/ /app/backend/
-COPY frontend/ /app/frontend/
+# Install dependencies
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose standard web port
+# Copy source code and frontend
+COPY backend /app/backend
+COPY frontend /app/frontend
+
+# Pre-seed the database with Minna no Nihongo curriculum
+RUN python /app/backend/app/seed.py
+
 EXPOSE 8000
 
-# Run Uvicorn ASGI Server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

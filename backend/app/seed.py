@@ -38,13 +38,14 @@ def init_db():
     """Create all tables."""
     Base.metadata.create_all(bind=engine)
 
-def seed_chapters(db: Session) -> int:
-    """Initialize all 25 Minna no Nihongo chapters. Chapter 1 is unlocked by default."""
+def seed_chapters(db: Session, user_id: int = 1) -> int:
+    """Initialize all 25 Minna no Nihongo chapters for the given user. Chapter 1 is unlocked by default."""
     inserted = 0
     for lesson_num, title, desc in CHAPTER_METADATA:
-        existing = db.query(ChapterProgress).filter_by(lesson_number=lesson_num).first()
+        existing = db.query(ChapterProgress).filter_by(user_id=user_id, lesson_number=lesson_num).first()
         if not existing:
             chap = ChapterProgress(
+                user_id=user_id,
                 lesson_number=lesson_num,
                 title=title,
                 description=desc,
@@ -56,8 +57,8 @@ def seed_chapters(db: Session) -> int:
     db.commit()
     return inserted
 
-def seed_vocab(db: Session, seed_file: Path = None) -> int:
-    """Seeds vocabulary words and their initial user progress."""
+def seed_vocab(db: Session, seed_file: Path = None, user_id: int = 1) -> int:
+    """Seeds vocabulary words and initial user progress for the given user."""
     if seed_file is None:
         seed_file = settings.SEED_FILE
 
@@ -69,12 +70,12 @@ def seed_vocab(db: Session, seed_file: Path = None) -> int:
 
     inserted_count = 0
     for item in vocab_list:
-        existing = db.query(Word).filter(
+        word = db.query(Word).filter(
             Word.kana == item["kana"],
             Word.meaning == item["meaning"]
         ).first()
 
-        if not existing:
+        if not word:
             word = Word(
                 lesson_number=item.get("lesson_number", 1),
                 book_title="Minna no Nihongo I",
@@ -90,8 +91,15 @@ def seed_vocab(db: Session, seed_file: Path = None) -> int:
             db.add(word)
             db.flush()
 
+        existing_progress = db.query(UserProgress).filter_by(
+            user_id=user_id,
+            word_id=word.id
+        ).first()
+
+        if not existing_progress:
             # Initialize 1-star progress; initially not in review queue
             progress = UserProgress(
+                user_id=user_id,
                 word_id=word.id,
                 is_in_review=False,
                 star_rating=1,
@@ -109,8 +117,10 @@ if __name__ == "__main__":
     init_db()
     db = SessionLocal()
     try:
-        c_count = seed_chapters(db)
-        v_count = seed_vocab(db)
-        print(f"Initialized {c_count} chapters and seeded {v_count} Minna no Nihongo vocabulary words!")
+        from app.auth import ensure_demo_user
+        ensure_demo_user(db)
+        chap_count = seed_chapters(db, user_id=1)
+        vocab_count = seed_vocab(db, user_id=1)
+        print(f"Seeding completed. Initialized {chap_count} chapters and {vocab_count} user progress records.")
     finally:
         db.close()

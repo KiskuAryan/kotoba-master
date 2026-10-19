@@ -2,6 +2,28 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from pydantic import BaseModel, Field, ConfigDict
 
+# --- Auth Schemas ---
+class UserRegister(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    email: str = Field(min_length=5, max_length=100)
+    password: str = Field(min_length=6, max_length=100)
+
+class UserLogin(BaseModel):
+    username_or_email: str
+    password: str
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    email: str
+    created_at: Optional[datetime] = None
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
 # --- Word Schemas ---
 class WordBase(BaseModel):
     lesson_number: int = 1

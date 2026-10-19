@@ -29,6 +29,25 @@
       <button class="tab-btn" data-tab="roadmap">🗺️ Roadmap (課)</button>
       <button class="tab-btn" data-tab="analytics">📊 Progress</button>
     </div>
+
+    <!-- User Auth Area -->
+    <div class="user-auth-area">
+      <!-- Logged in state -->
+      <div id="auth-logged-in" style="display: none; align-items: center; gap: 0.6rem;">
+        <span class="user-pill">
+          👤 <strong id="current-username" style="color: #38bdf8;">demo</strong>
+        </span>
+        <button id="logout-btn" class="pill-btn" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+          Log Out
+        </button>
+      </div>
+      <!-- Guest / Logged out state -->
+      <div id="auth-logged-out" style="display: flex; align-items: center; gap: 0.5rem;">
+        <button id="open-auth-btn" class="pill-btn" style="padding: 0.4rem 0.9rem; font-size: 0.85rem; background: linear-gradient(135deg, var(--accent-indigo), var(--accent-blue)); color: white; border: none; font-weight: 600; cursor: pointer;">
+          🔑 Sign In / Register
+        </button>
+      </div>
+    </div>
   </header>
 
   <!-- Main View Area -->
@@ -385,6 +404,58 @@
       <button id="unlock-modal-close-btn" class="btn-primary" style="margin: 0 auto; padding: 0.75rem 2rem;">
         Go to New Lesson →
       </button>
+    </div>
+  </div>
+
+  <!-- ==================== USER AUTH MODAL ==================== -->
+  <div id="auth-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 380px;">
+      <!-- Tabs: Sign In / Register -->
+      <div style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 1.25rem; gap: 0.5rem;">
+        <button id="tab-auth-login" class="pill-btn" style="flex: 1; text-align: center; border-radius: 8px; background: rgba(99, 102, 241, 0.25); color: #c7d2fe; border: 1px solid var(--accent-indigo);">Sign In</button>
+        <button id="tab-auth-register" class="pill-btn" style="flex: 1; text-align: center; border-radius: 8px; background: transparent; color: var(--text-muted); border: 1px solid transparent;">Register</button>
+      </div>
+
+      <!-- Error / Alert Banner -->
+      <div id="auth-error-msg" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 0.6rem 0.85rem; border-radius: 6px; font-size: 0.85rem; margin-bottom: 1rem;"></div>
+
+      <!-- Login Form -->
+      <form id="login-form">
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Username or Email</label>
+          <input type="text" id="login-username" required class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="demo">
+        </div>
+        <div style="margin-bottom: 1.25rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Password</label>
+          <input type="password" id="login-password" required class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-size: 0.95rem;">
+          🚀 Sign In &amp; Load Progress
+        </button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="register-form" style="display: none;">
+        <div style="margin-bottom: 0.75rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Username</label>
+          <input type="text" id="reg-username" required minlength="3" class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="e.g. kenji_san">
+        </div>
+        <div style="margin-bottom: 0.75rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Email</label>
+          <input type="email" id="reg-email" required class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="kenji@example.com">
+        </div>
+        <div style="margin-bottom: 1.25rem;">
+          <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Password (min 6 characters)</label>
+          <input type="password" id="reg-password" required minlength="6" class="chapter-select" style="width: 100%; box-sizing: border-box; padding: 0.6rem;" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem; font-size: 0.95rem; background: linear-gradient(135deg, #10b981, #0ea5e9);">
+          ✨ Create Account &amp; Start
+        </button>
+      </form>
+
+      <div style="margin-top: 1rem; text-align: center;">
+        <button type="button" id="auth-modal-close-btn" class="pill-btn" style="background: transparent; color: var(--text-muted); font-size: 0.8rem; border: none; cursor: pointer;">Cancel</button>
+      </div>
     </div>
   </div>
 

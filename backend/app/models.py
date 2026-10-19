@@ -8,10 +8,30 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     CheckConstraint,
+    UniqueConstraint,
     func
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(100), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    progress_records = relationship("UserProgress", back_populates="user", cascade="all, delete-orphan")
+    chapter_records = relationship("ChapterProgress", back_populates="user", cascade="all, delete-orphan")
+    quiz_logs = relationship("QuizLog", back_populates="user", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}')>"
+
 
 class Word(Base):
     __tablename__ = "words"
@@ -29,8 +49,13 @@ class Word(Base):
     example_en = Column(Text, nullable=True)
 
     # Relationships
-    progress = relationship("UserProgress", back_populates="word", uselist=False, cascade="all, delete-orphan")
+    progress_records = relationship("UserProgress", back_populates="word", cascade="all, delete-orphan")
     quiz_logs = relationship("QuizLog", back_populates="word", cascade="all, delete-orphan")
+
+    @property
+    def progress(self):
+        """Helper property for backward compatibility with single progress serializer."""
+        return self.progress_records[0] if self.progress_records else None
 
     def __repr__(self):
         return f"<Word(id={self.id}, L{self.lesson_number}, '{self.kana}', '{self.meaning}')>"
@@ -40,7 +65,8 @@ class UserProgress(Base):
     __tablename__ = "user_progress"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    word_id = Column(Integer, ForeignKey("words.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, default=1, index=True)
+    word_id = Column(Integer, ForeignKey("words.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Study & Review Queue Status (AHA Lab style two-stage flow)
     is_in_review = Column(Boolean, nullable=False, default=False, index=True)
@@ -58,10 +84,12 @@ class UserProgress(Base):
 
     __table_args__ = (
         CheckConstraint("star_rating >= 1 AND star_rating <= 5", name="check_star_rating_range"),
+        UniqueConstraint("user_id", "word_id", name="uq_user_word"),
     )
 
-    # Relationship
-    word = relationship("Word", back_populates="progress")
+    # Relationships
+    user = relationship("User", back_populates="progress_records")
+    word = relationship("Word", back_populates="progress_records")
 
     @property
     def accuracy_rate(self) -> float:
@@ -70,27 +98,36 @@ class UserProgress(Base):
         return round((self.correct_attempts / self.total_attempts) * 100, 1)
 
     def __repr__(self):
-        return f"<UserProgress(word_id={self.word_id}, in_review={self.is_in_review}, stars={self.star_rating})>"
+        return f"<UserProgress(user_id={self.user_id}, word_id={self.word_id}, in_review={self.is_in_review}, stars={self.star_rating})>"
 
 
 class ChapterProgress(Base):
     __tablename__ = "chapter_progress"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    lesson_number = Column(Integer, unique=True, nullable=False, index=True)  # 1 to 25
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, default=1, index=True)
+    lesson_number = Column(Integer, nullable=False, index=True)  # 1 to 25
     title = Column(String(100), nullable=False)
     description = Column(String(255), nullable=True)
     is_unlocked = Column(Boolean, nullable=False, default=False)
     unlocked_at = Column(DateTime(timezone=True), nullable=True)
 
+    __table_args__ = (
+        UniqueConstraint("user_id", "lesson_number", name="uq_user_lesson"),
+    )
+
+    # Relationship
+    user = relationship("User", back_populates="chapter_records")
+
     def __repr__(self):
-        return f"<ChapterProgress(L{self.lesson_number}, unlocked={self.is_unlocked})>"
+        return f"<ChapterProgress(user_id={self.user_id}, L{self.lesson_number}, unlocked={self.is_unlocked})>"
 
 
 class QuizLog(Base):
     __tablename__ = "quiz_logs"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, default=1, index=True)
     word_id = Column(Integer, ForeignKey("words.id", ondelete="CASCADE"), nullable=False, index=True)
     selected_meaning = Column(String(255), nullable=False)
     is_correct = Column(Boolean, nullable=False)
@@ -98,8 +135,9 @@ class QuizLog(Base):
     star_rating_after = Column(Integer, nullable=False)
     answered_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    # Relationship
+    # Relationships
+    user = relationship("User", back_populates="quiz_logs")
     word = relationship("Word", back_populates="quiz_logs")
 
     def __repr__(self):
-        return f"<QuizLog(word_id={self.word_id}, correct={self.is_correct}, stars={self.star_rating_before}->{self.star_rating_after})>"
+        return f"<QuizLog(user_id={self.user_id}, word_id={self.word_id}, correct={self.is_correct})>"
