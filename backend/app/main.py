@@ -1,6 +1,6 @@
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -85,3 +85,9 @@ def serve_frontend_index():
 @app.get("/health", tags=["Health"])
 def health_check():
     return {"status": "ok", "app": settings.PROJECT_NAME, "version": settings.PROJECT_VERSION}
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_spa_fallback(full_path: str):
+    if full_path.startswith("api") or full_path in ("docs", "redoc", "openapi.json"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return serve_frontend_index()

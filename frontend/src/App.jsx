@@ -28,7 +28,7 @@ function AppContent() {
     }
     try {
       const due = await api.getDueReviews({ limit: 100 });
-      setDueCount(due.length);
+      setDueCount(Array.isArray(due) ? due.length : (due?.due_count || 0));
     } catch (e) {
       // ignore
     }

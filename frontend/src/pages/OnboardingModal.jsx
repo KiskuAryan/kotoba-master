@@ -214,8 +214,11 @@ export default function OnboardingModal({ isOpen, onClose, onComplete }) {
                   <div className="flex items-center gap-3">
                     <span className="text-2xl p-2 bg-slate-100 rounded-xl">{deck.icon || '📖'}</span>
                     <div>
-                      <div className="text-xs font-bold text-slate-900">{deck.title}</div>
-                      <div className="text-[10px] text-slate-500">{deck.japanese_title} • {deck.word_count} words</div>
+                      <div className="text-xs font-bold text-slate-900">{deck.title || deck.name || 'Starter Deck'}</div>
+                      <div className="text-[10px] text-slate-500">
+                        {(deck.japanese_title || deck.name_ja) ? `${deck.japanese_title || deck.name_ja} • ` : ''}
+                        {deck.word_count ?? deck.total_words ?? 0} words
+                      </div>
                     </div>
                   </div>
                   {selectedDeckId === deck.id && (

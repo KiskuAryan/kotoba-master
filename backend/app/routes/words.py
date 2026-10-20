@@ -79,10 +79,16 @@ def list_words(
             "romaji": w.romaji,
             "meaning": w.meaning,
             "jlpt_level": w.jlpt_level,
+            "level": w.jlpt_level,
             "part_of_speech": w.part_of_speech,
             "example_ja": w.example_ja,
             "example_en": w.example_en,
+            "example_sentence": w.example_ja,
+            "example_translation": w.example_en,
             "mnemonic": w.mnemonic,
+            "stars": p.star_rating if p else 1,
+            "is_in_review": p.is_in_review if p else False,
+            "user_notes": p.user_notes if p else "",
             "progress": prog_out
         }
         results.append(WordOut(**word_dict))
@@ -117,10 +123,16 @@ def get_word_detail(
         romaji=word.romaji,
         meaning=word.meaning,
         jlpt_level=word.jlpt_level,
+        level=word.jlpt_level,
         part_of_speech=word.part_of_speech,
         example_ja=word.example_ja,
         example_en=word.example_en,
+        example_sentence=word.example_ja,
+        example_translation=word.example_en,
         mnemonic=word.mnemonic,
+        stars=prog.star_rating if prog else 1,
+        is_in_review=prog.is_in_review if prog else False,
+        user_notes=prog.user_notes if prog else "",
         progress=prog_out
     )
 

@@ -63,16 +63,20 @@ class DeckBase(BaseModel):
     slug: str
     name: str
     name_ja: str
+    title: Optional[str] = None
+    japanese_title: Optional[str] = None
     description: Optional[str] = None
     icon: str = "📖"
     color: str = "#E0F2FE"
     jlpt_level: str = "N5"
+    level: Optional[str] = None
     sort_order: int = 0
 
 class DeckOut(DeckBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     total_words: int = 0
+    word_count: Optional[int] = 0
     words_in_review: int = 0
     mastered_words: int = 0
     mastery_percentage: float = 0.0
@@ -89,9 +93,12 @@ class WordBase(BaseModel):
     romaji: str
     meaning: str
     jlpt_level: str
+    level: Optional[str] = None
     part_of_speech: str
     example_ja: Optional[str] = None
     example_en: Optional[str] = None
+    example_sentence: Optional[str] = None
+    example_translation: Optional[str] = None
     mnemonic: Optional[str] = None
 
 class WordCreate(WordBase):
@@ -119,6 +126,9 @@ class ProgressOut(BaseModel):
 class WordOut(WordBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    stars: int = 1
+    is_in_review: bool = False
+    user_notes: Optional[str] = None
     progress: Optional[ProgressOut] = None
 
 class WordDetailOut(WordOut):
@@ -128,6 +138,7 @@ class WordDetailOut(WordOut):
 # ==================== REVIEW & SM-2 SCHEMAS ====================
 class ReviewDueItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+    id: Optional[int] = None
     word_id: int
     deck_id: Optional[int] = None
     deck_name: Optional[str] = None
@@ -136,20 +147,27 @@ class ReviewDueItem(BaseModel):
     romaji: str
     meaning: str
     jlpt_level: str
+    level: Optional[str] = None
     part_of_speech: str
     example_ja: Optional[str] = None
     example_en: Optional[str] = None
+    example_sentence: Optional[str] = None
+    example_translation: Optional[str] = None
     mnemonic: Optional[str] = None
     star_rating: int = 1
+    stars: int = 1
     repetitions: int = 0
     interval_days: float = 0.0
     ease_factor: float = 2.5
     next_review_due: Optional[datetime] = None
     is_overdue: bool = False
+    options: List[str] = []
 
 class ReviewSubmitRequest(BaseModel):
     word_id: int
-    rating: str = Field(description="'again', 'hard', 'good', or 'easy'")
+    rating: Optional[str] = Field(default=None, description="'again', 'hard', 'good', 'easy', 'correct', or 'incorrect'")
+    selected_option: Optional[str] = None
+    is_correct: Optional[bool] = None
     response_time_ms: Optional[int] = 0
 
 class ReviewSubmitResponse(BaseModel):
@@ -157,8 +175,11 @@ class ReviewSubmitResponse(BaseModel):
     rating: str
     grade: int
     is_correct: bool
+    correct_meaning: Optional[str] = None
     star_rating_before: int
     star_rating_after: int
+    stars: Optional[int] = None
+    newStars: Optional[int] = None
     repetitions: int
     interval_days: float
     ease_factor: float
@@ -202,6 +223,8 @@ class ChapterOut(BaseModel):
     words_in_review: int
     mastery_percentage: float
     can_unlock: bool
+    required_mastery: float = 70.0
+    prev_lesson_mastery: Optional[float] = None
 
 class ToggleReviewRequest(BaseModel):
     word_id: int

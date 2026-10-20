@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models import Word, UserProgress, ReviewLog, User
 from app.auth import get_current_user_optional, get_current_user_required
 from app.schemas import ReviewDueItem, ReviewSubmitRequest, ReviewSubmitResponse
-from app.algorithm import calculate_sm2_schedule, get_due_words_for_user
+from app.algorithm import calculate_sm2_schedule, get_due_words_for_user, generate_mcq_options
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
@@ -20,7 +20,7 @@ def get_due_reviews(
 ):
     """
     Returns items currently due for review according to SM-2 scheduling,
-    prioritizing overdue items and new cards in the queue.
+    prioritizing overdue items and new cards in the queue, populated with 4-choice MCQ options.
     """
     now = datetime.now(timezone.utc)
 
@@ -47,9 +47,14 @@ def get_due_reviews(
 
     due_items = []
     for word, prog in due_pairs:
-        is_overdue = prog.next_review_due is not None and prog.next_review_due < now
+        due_date = prog.next_review_due
+        if due_date is not None and due_date.tzinfo is None:
+            due_date = due_date.replace(tzinfo=timezone.utc)
+        is_overdue = due_date is not None and due_date < now
+        options = generate_mcq_options(db, word, total_options=4)
         due_items.append(
             ReviewDueItem(
+                id=word.id,
                 word_id=word.id,
                 deck_id=word.deck_id,
                 deck_name=word.deck.name if word.deck else None,
@@ -58,16 +63,21 @@ def get_due_reviews(
                 romaji=word.romaji,
                 meaning=word.meaning,
                 jlpt_level=word.jlpt_level,
+                level=word.jlpt_level,
                 part_of_speech=word.part_of_speech,
                 example_ja=word.example_ja,
                 example_en=word.example_en,
+                example_sentence=word.example_ja,
+                example_translation=word.example_en,
                 mnemonic=word.mnemonic,
                 star_rating=prog.star_rating,
+                stars=prog.star_rating,
                 repetitions=prog.repetitions,
                 interval_days=prog.interval_days,
                 ease_factor=prog.ease_factor,
                 next_review_due=prog.next_review_due,
-                is_overdue=is_overdue
+                is_overdue=is_overdue,
+                options=options
             )
         )
 
@@ -94,12 +104,29 @@ def submit_review(
     if not word:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Word not found.")
 
-    rating_normalized = payload.rating.strip().lower()
-    if rating_normalized not in ("again", "hard", "good", "easy"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid rating. Must be 'again', 'hard', 'good', or 'easy'."
-        )
+    # Determine correctness from selected_option, is_correct, or rating
+    is_correct = False
+    if payload.selected_option is not None:
+        is_correct = (payload.selected_option.strip().lower() == word.meaning.strip().lower())
+    elif payload.is_correct is not None:
+        is_correct = bool(payload.is_correct)
+    elif payload.rating:
+        r = payload.rating.strip().lower()
+        is_correct = r in ("good", "easy", "correct", "pass", "hard")
+        if r == "hard":
+            is_correct = True
+
+    # Map to SM-2 rating:
+    if payload.rating and payload.rating.strip().lower() in ("again", "hard", "good", "easy"):
+        rating_normalized = payload.rating.strip().lower()
+    else:
+        if is_correct:
+            if payload.response_time_ms and payload.response_time_ms < 3000:
+                rating_normalized = "easy"
+            else:
+                rating_normalized = "good"
+        else:
+            rating_normalized = "again"
 
     prog = db.query(UserProgress).filter_by(user_id=user.id, word_id=word.id).first()
     now = datetime.now(timezone.utc)
@@ -177,12 +204,15 @@ def submit_review(
         rating=rating_normalized,
         grade=schedule["grade"],
         is_correct=schedule["is_correct"],
+        correct_meaning=word.meaning,
         star_rating_before=stars_before,
         star_rating_after=prog.star_rating,
+        stars=prog.star_rating,
+        newStars=prog.star_rating,
         repetitions=prog.repetitions,
         interval_days=prog.interval_days,
         ease_factor=prog.ease_factor,
         streak=prog.streak,
         next_review_due=prog.next_review_due,
-        message=rating_messages[rating_normalized]
+        message=rating_messages.get(rating_normalized, "Review recorded.")
     )

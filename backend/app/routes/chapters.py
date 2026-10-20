@@ -11,7 +11,7 @@ from app.routes.auth import init_user_chapters
 
 router = APIRouter(prefix="/chapters", tags=["Chapters & Lessons"])
 
-MASTERY_THRESHOLD_PERCENT = 75.0  # 75% star mastery unlocks next chapter
+MASTERY_THRESHOLD_PERCENT = 70.0  # 70% star mastery in previous lesson unlocks next lesson
 
 def calculate_chapter_mastery(db: Session, lesson_number: int, user_id: int = 1) -> float:
     """
@@ -38,14 +38,21 @@ def list_chapters(
     db: Session = Depends(get_db)
 ):
     """
-    Lists all 25 Minna no Nihongo chapters with unlock status and live mastery % for the current user.
+    Lists all 25 Minna no Nihongo chapters with AHA Lab style progression:
+    Lesson 1 unlocked by default; Lesson N unlocks once Lesson N-1 reaches 70% mastery.
     """
     chapters = db.query(ChapterProgress).filter_by(user_id=user.id).order_by(ChapterProgress.lesson_number).all()
     if not chapters:
         init_user_chapters(db, user.id)
         chapters = db.query(ChapterProgress).filter_by(user_id=user.id).order_by(ChapterProgress.lesson_number).all()
 
+    # Precompute masteries to evaluate progression
+    masteries = {}
+    for chap in chapters:
+        masteries[chap.lesson_number] = calculate_chapter_mastery(db, chap.lesson_number, user_id=user.id)
+
     out = []
+    now = datetime.now(timezone.utc)
     for chap in chapters:
         words = db.query(Word).filter(Word.lesson_number == chap.lesson_number).all()
         total_words = len(words)
@@ -59,8 +66,16 @@ def list_chapters(
                 UserProgress.is_in_review == True
             ).count()
 
-        mastery_pct = calculate_chapter_mastery(db, chap.lesson_number, user_id=user.id)
-        can_unlock = (mastery_pct >= MASTERY_THRESHOLD_PERCENT)
+        mastery_pct = masteries[chap.lesson_number]
+        prev_mastery = masteries.get(chap.lesson_number - 1, 100.0) if chap.lesson_number > 1 else None
+
+        # Check progression: Lesson 1 always unlocked; Lesson N unlocked if Lesson N-1 >= 70%
+        can_unlock = (chap.lesson_number == 1) or (prev_mastery is not None and prev_mastery >= MASTERY_THRESHOLD_PERCENT)
+        
+        if can_unlock and not chap.is_unlocked:
+            chap.is_unlocked = True
+            chap.unlocked_at = now
+            db.commit()
 
         out.append(ChapterOut(
             lesson_number=chap.lesson_number,
@@ -70,7 +85,9 @@ def list_chapters(
             total_words=total_words,
             words_in_review=words_in_review,
             mastery_percentage=mastery_pct,
-            can_unlock=can_unlock
+            can_unlock=can_unlock,
+            required_mastery=MASTERY_THRESHOLD_PERCENT,
+            prev_lesson_mastery=prev_mastery
         ))
     return out
 
@@ -90,6 +107,18 @@ def get_chapter_words(
     if not chap:
         raise HTTPException(status_code=404, detail="Chapter not found.")
 
+    if lesson_number > 1 and not chap.is_unlocked:
+        prev_mastery = calculate_chapter_mastery(db, lesson_number - 1, user_id=user.id)
+        if prev_mastery >= MASTERY_THRESHOLD_PERCENT:
+            chap.is_unlocked = True
+            chap.unlocked_at = datetime.now(timezone.utc)
+            db.commit()
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Lesson {lesson_number} is locked! Master Lesson {lesson_number - 1} to at least {int(MASTERY_THRESHOLD_PERCENT)}% to unlock."
+            )
+
     words = db.query(Word).filter(Word.lesson_number == lesson_number).order_by(Word.id).all()
     out = []
     for w in words:
@@ -108,9 +137,16 @@ def get_chapter_words(
             "romaji": w.romaji,
             "meaning": w.meaning,
             "jlpt_level": w.jlpt_level,
+            "level": w.jlpt_level,
             "part_of_speech": w.part_of_speech,
             "example_ja": w.example_ja,
             "example_en": w.example_en,
+            "example_sentence": w.example_ja,
+            "example_translation": w.example_en,
+            "mnemonic": w.mnemonic,
+            "stars": up.star_rating if up else 1,
+            "is_in_review": up.is_in_review if up else False,
+            "user_notes": up.user_notes if up else "",
             "progress": ProgressOut.model_validate(up)
         }
         out.append(WordOut.model_validate(word_dict))
@@ -129,26 +165,40 @@ def add_all_chapter_words_to_review(
     Batch adds all words from this chapter into the active review queue for this user.
     """
     chap = db.query(ChapterProgress).filter_by(user_id=user.id, lesson_number=lesson_number).first()
-    if not chap or not chap.is_unlocked:
-        raise HTTPException(status_code=400, detail="Chapter is locked or does not exist.")
+    now = datetime.now(timezone.utc)
+    if not chap:
+        chap = ChapterProgress(user_id=user.id, lesson_number=lesson_number, title=f"Lesson {lesson_number}", is_unlocked=(lesson_number == 1), unlocked_at=now if lesson_number == 1 else None)
+        db.add(chap)
+        db.flush()
+
+    if lesson_number > 1 and not chap.is_unlocked:
+        prev_mastery = calculate_chapter_mastery(db, lesson_number - 1, user_id=user.id)
+        if prev_mastery < MASTERY_THRESHOLD_PERCENT:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Lesson {lesson_number} is locked! Master Lesson {lesson_number - 1} to at least {int(MASTERY_THRESHOLD_PERCENT)}% first (Current: {prev_mastery}%)."
+            )
+        chap.is_unlocked = True
+        chap.unlocked_at = now
 
     words = db.query(Word.id).filter(Word.lesson_number == lesson_number).all()
     word_ids = [w[0] for w in words]
     if not word_ids:
         return {"status": "ok", "added_count": 0}
 
-    now = datetime.now(timezone.utc)
     added_count = 0
     for wid in word_ids:
         up = db.query(UserProgress).filter_by(user_id=user.id, word_id=wid).first()
         if not up:
-            up = UserProgress(user_id=user.id, word_id=wid, star_rating=1, is_in_review=True, learned_at=now)
+            up = UserProgress(user_id=user.id, word_id=wid, star_rating=1, is_in_review=True, learned_at=now, next_review_due=now)
             db.add(up)
             added_count += 1
         else:
             up.is_in_review = True
             if not up.learned_at:
                 up.learned_at = now
+            if not up.next_review_due:
+                up.next_review_due = now
             added_count += 1
 
     db.commit()

@@ -32,7 +32,7 @@ export default function Dashboard({ onStartReview, onBrowseDecks, onViewStats, o
     loadDashboardData();
   }, []);
 
-  const dueCount = dueWords.length;
+  const dueCount = Array.isArray(dueWords) ? dueWords.length : (dueWords?.due_count || 0);
   const dailyGoal = settings?.daily_goal || 20;
   const reviewedToday = stats?.reviewed_today || 0;
   const goalProgress = Math.min(100, Math.round((reviewedToday / dailyGoal) * 100));

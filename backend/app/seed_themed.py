@@ -157,6 +157,23 @@ def seed_database():
 
         # 3. Seed Vocabulary Words
         inserted_words = 0
+        DECK_LESSON_MAP = {
+            "n5-daily-essentials": 1,
+            "n5-home-objects": 2,
+            "n5-numbers-time": 4,
+            "n5-travel-transit": 5,
+            "n5-food-dining": 6,
+            "n5-action-verbs": 4,
+            "n5-adjectives": 8,
+            "n5-people-family": 1,
+            "n4-nature-weather": 12,
+            "n4-work-tech": 14,
+            "n4-advanced-verbs": 16,
+            "n4-connectors-adverbs": 20,
+            "n4-emotions-sensations": 21,
+            "n4-society-culture": 22
+        }
+
         for item in RAW_VOCABULARY:
             word = db.query(Word).filter(
                 Word.kana == item["kana"],
@@ -164,11 +181,12 @@ def seed_database():
             ).first()
 
             deck_id = deck_id_map.get(item["deck_slug"])
+            lesson_num = DECK_LESSON_MAP.get(item.get("deck_slug"), 1)
 
             if not word:
                 word = Word(
                     deck_id=deck_id,
-                    lesson_number=1,
+                    lesson_number=lesson_num,
                     book_title=f"JLPT {item['jlpt']} Vocabulary",
                     kanji=item.get("kanji"),
                     kana=item["kana"],
@@ -184,11 +202,12 @@ def seed_database():
                 db.flush()
                 inserted_words += 1
             else:
-                # Update deck_id and mnemonic if missing
-                if word.deck_id != deck_id or not word.mnemonic:
-                    word.deck_id = deck_id
+                # Update deck_id, lesson_number, and mnemonic if missing
+                word.deck_id = deck_id
+                word.lesson_number = lesson_num
+                if not word.mnemonic:
                     word.mnemonic = item.get("mn")
-                    db.flush()
+                db.flush()
 
             # Ensure demo user has progress record initialized
             existing_prog = db.query(UserProgress).filter_by(

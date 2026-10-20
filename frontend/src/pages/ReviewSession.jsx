@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Volume2, ChevronRight, Award, Flame, RotateCcw, CheckCircle, ArrowLeft, Sparkles, BookOpen } from 'lucide-react';
+import { Volume2, ChevronRight, Flame, RotateCcw, CheckCircle, XCircle, ArrowLeft, Sparkles, BookOpen, Check, X, ArrowRight } from 'lucide-react';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -12,9 +12,15 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
 
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // MCQ state for current card
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [answered, setAnswered] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [lastResult, setLastResult] = useState(null);
+
   const [sessionLogs, setSessionLogs] = useState([]);
   const [startTime, setStartTime] = useState(Date.now());
   const [sessionCompleted, setSessionCompleted] = useState(false);
@@ -24,9 +30,13 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
     setLoading(true);
     try {
       const data = await api.getDueReviews({ limit: settings?.daily_goal || 25 });
-      setQueue(data);
+      const cards = Array.isArray(data) ? data : (data?.cards || []);
+      setQueue(cards);
       setCurrentIndex(0);
-      setFlipped(false);
+      setSelectedOption(null);
+      setAnswered(false);
+      setIsCorrect(false);
+      setLastResult(null);
       setSessionLogs([]);
       setSessionCompleted(false);
       setStartTime(Date.now());
@@ -43,49 +53,68 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
 
   const currentCard = queue[currentIndex];
 
-  // Auto-play audio if enabled
+  // Auto-play audio on new card if audio_autoplay is enabled
   useEffect(() => {
-    if (flipped && settings?.audio_autoplay && currentCard) {
-      speakJapanese(currentCard.kana || currentCard.kanji);
-    }
-  }, [flipped, settings?.audio_autoplay, currentCard]);
+    if (!currentCard || answered || !settings?.audio_autoplay) return;
+    speakJapanese(currentCard.kana || currentCard.kanji);
+  }, [currentIndex, currentCard, settings?.audio_autoplay]);
 
-  // Handle rating submission
-  const handleRate = async (rating) => {
-    if (!currentCard || submitting) return;
-    setSubmitting(true);
+  // Ensure current card always has 4 options
+  const options = useMemo(() => {
+    if (!currentCard) return [];
+    if (Array.isArray(currentCard.options) && currentCard.options.length >= 2) {
+      return currentCard.options;
+    }
+    // Fallback: collect meanings from other cards in the queue
+    const correctMeaning = currentCard.meaning;
+    const others = queue
+      .filter((c) => c.meaning !== correctMeaning)
+      .map((c) => c.meaning);
+    const shuffledOthers = [...new Set(others)].sort(() => 0.5 - Math.random()).slice(0, 3);
+    const combined = [...shuffledOthers, correctMeaning].sort(() => 0.5 - Math.random());
+    return combined;
+  }, [currentCard, queue]);
+
+  // Handle MCQ Option Selection
+  const handleSelectOption = async (option) => {
+    if (answered || submitting || !currentCard) return;
+
     const responseTime = Date.now() - startTime;
+    const correct = option.trim().toLowerCase() === currentCard.meaning.trim().toLowerCase();
+
+    setSelectedOption(option);
+    setAnswered(true);
+    setIsCorrect(correct);
+    setSubmitting(true);
+
+    // Speak pronunciation on answer
+    speakJapanese(currentCard.kana || currentCard.kanji);
 
     try {
-      const result = await api.submitReview(currentCard.id, rating, responseTime);
+      const cardId = currentCard.id || currentCard.word_id;
+      const result = await api.submitReview(cardId, {
+        selected_option: option,
+        is_correct: correct,
+        response_time_ms: responseTime
+      });
+
+      setLastResult(result);
 
       const logEntry = {
         word: currentCard,
-        rating,
-        oldStars: currentCard.stars,
-        newStars: result.stars,
-        nextDue: result.next_review_due
+        selectedOption: option,
+        isCorrect: correct,
+        oldStars: currentCard.stars ?? currentCard.star_rating ?? 1,
+        newStars: result.stars ?? result.newStars ?? result.star_rating_after ?? 1,
+        intervalDays: result.interval_days,
+        streak: result.streak
       };
 
-      const nextLogs = [...sessionLogs, logEntry];
-      setSessionLogs(nextLogs);
+      setSessionLogs((prev) => [...prev, logEntry]);
 
-      if (currentIndex + 1 < queue.length) {
-        setCurrentIndex((prev) => prev + 1);
-        setFlipped(false);
-        setStartTime(Date.now());
-      } else {
-        // Session Complete!
-        setSessionCompleted(true);
-        refreshUser();
-        // Fire confetti celebration
-        try {
-          confetti({
-            particleCount: 80,
-            spread: 70,
-            origin: { y: 0.6 }
-          });
-        } catch (e) {}
+      // If incorrect, queue the card again at the end for reinforcement
+      if (!correct) {
+        setQueue((prevQueue) => [...prevQueue, { ...currentCard, isRetry: true }]);
       }
     } catch (err) {
       showToast('Error recording review: ' + err.message, 'error');
@@ -94,25 +123,50 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
     }
   };
 
-  // Keyboard shortcut listener
+  // Advance to next card
+  const handleNext = () => {
+    if (currentIndex + 1 < queue.length) {
+      setCurrentIndex((prev) => prev + 1);
+      setSelectedOption(null);
+      setAnswered(false);
+      setIsCorrect(false);
+      setLastResult(null);
+      setStartTime(Date.now());
+    } else {
+      // Session Completed!
+      setSessionCompleted(true);
+      refreshUser();
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      } catch (e) {}
+    }
+  };
+
+  // Keyboard shortcut listener (Keys 1-4 for options, Space/Enter for Next)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (sessionCompleted || !currentCard) return;
 
-      if (e.code === 'Space') {
-        e.preventDefault();
-        setFlipped((f) => !f);
-      } else if (flipped && !submitting) {
-        if (e.key === '1') handleRate('again');
-        else if (e.key === '2') handleRate('hard');
-        else if (e.key === '3') handleRate('good');
-        else if (e.key === '4') handleRate('easy');
+      if (!answered && !submitting) {
+        if (e.key === '1' && options[0]) handleSelectOption(options[0]);
+        else if (e.key === '2' && options[1]) handleSelectOption(options[1]);
+        else if (e.key === '3' && options[2]) handleSelectOption(options[2]);
+        else if (e.key === '4' && options[3]) handleSelectOption(options[3]);
+      } else if (answered) {
+        if (e.key === 'Enter' || e.code === 'Space') {
+          e.preventDefault();
+          handleNext();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [flipped, submitting, sessionCompleted, currentCard]);
+  }, [answered, submitting, sessionCompleted, currentCard, options]);
 
   // Star color mapping helper
   const getStarColorBand = (stars) => {
@@ -139,18 +193,18 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
   if (queue.length === 0 && !sessionCompleted) {
     return (
       <div className="min-h-[75vh] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-notebook-paper border-4 border-slate-800 rounded-3xl p-8 bg-notebook-grid text-slate-800 text-center shadow-xl">
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-notebook-yellow border-2 border-slate-800 flex items-center justify-center text-4xl mb-4 rotate-3 shadow-md">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-700 rounded-3xl p-8 text-slate-100 text-center shadow-2xl">
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-4xl mb-4 rotate-3 shadow-md">
             🎉
           </div>
           <div className="inline-block px-3 py-1 rounded-md bg-emerald-600 text-white text-xs font-black uppercase tracking-wider mb-2">
             All Caught Up!
           </div>
-          <h2 className="font-display text-3xl font-black text-slate-900 mb-2">
+          <h2 className="font-display text-3xl font-black text-white mb-2">
             No Cards Due Right Now!
           </h2>
-          <p className="text-xs text-slate-600 mb-6 font-medium leading-relaxed">
-            Great job! You have completed all scheduled spaced-repetition reviews for today. The SM-2 algorithm will schedule your next batch when memories need refreshing.
+          <p className="text-xs text-slate-400 mb-6 font-medium leading-relaxed">
+            Great job! You have completed all scheduled spaced-repetition reviews for today. The Anki/SM-2 spaced repetition algorithm will schedule your next batch when memories need reinforcement.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <button
@@ -162,7 +216,7 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
             </button>
             <button
               onClick={onBackToDashboard}
-              className="py-3 px-4 bg-slate-200 text-slate-800 font-display text-xs tracking-wider uppercase rounded-xl hover:bg-slate-300 transition-all"
+              className="py-3 px-4 bg-slate-800 text-slate-300 hover:text-white font-display text-xs tracking-wider uppercase rounded-xl hover:bg-slate-700 transition-all"
             >
               Dashboard
             </button>
@@ -172,25 +226,17 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
     );
   }
 
-  // 3. SESSION SUMMARY SCREEN (Oda Nobunaga Victory Banner)
+  // 3. SESSION SUMMARY SCREEN (Victory Banner)
   if (sessionCompleted) {
     const total = sessionLogs.length;
-    const againCount = sessionLogs.filter((l) => l.rating === 'again').length;
-    const hardCount = sessionLogs.filter((l) => l.rating === 'hard').length;
-    const goodCount = sessionLogs.filter((l) => l.rating === 'good').length;
-    const easyCount = sessionLogs.filter((l) => l.rating === 'easy').length;
-    const accuracy = total > 0 ? Math.round(((goodCount + easyCount) / total) * 100) : 100;
+    const correctCount = sessionLogs.filter((l) => l.isCorrect).length;
+    const missedCount = total - correctCount;
+    const accuracy = total > 0 ? Math.round((correctCount / total) * 100) : 100;
 
     return (
       <div className="min-h-[85vh] flex items-center justify-center p-4">
-        <div className="max-w-2xl w-full bg-nobunaga-cream border-4 border-nobunaga-dark rounded-3xl p-6 sm:p-10 shadow-2xl text-nobunaga-dark relative overflow-hidden">
-          {/* Decorative vertical badge */}
-          <div className="absolute top-4 right-4 hidden sm:block">
-            <div className="writing-vertical-rl text-[11px] font-bold text-nobunaga-red tracking-[0.3em] uppercase">
-              天下統一 • 記憶達成
-            </div>
-          </div>
-
+        <div className="max-w-2xl w-full bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-10 shadow-2xl text-slate-100 relative overflow-hidden">
+          {/* Header */}
           <div className="flex items-center gap-4 mb-6">
             <div className="w-14 h-14 bg-nobunaga-red text-white flex items-center justify-center text-3xl font-display font-black rounded-2xl shadow-lg shadow-nobunaga-red/30">
               勝
@@ -200,47 +246,39 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
                 <Sparkles size={12} />
                 <span>Session Complete</span>
               </div>
-              <h2 className="font-display text-3xl sm:text-4xl font-black text-nobunaga-dark">
-                VICTORY IN VOCABULARY
+              <h2 className="font-display text-3xl sm:text-4xl font-black text-white">
+                REVIEW COMPLETED
               </h2>
             </div>
           </div>
 
-          <p className="text-slate-700 text-sm font-medium mb-8">
-            You successfully reviewed <strong className="text-nobunaga-red font-bold">{total} words</strong>. Your retention intervals have been recalculated according to the SM-2 algorithm.
+          <p className="text-slate-300 text-sm font-medium mb-8">
+            You evaluated <strong className="text-nobunaga-red font-bold">{total} vocabulary items</strong>. Retention intervals and star mastery have been updated according to the SM-2 algorithm.
           </p>
 
           {/* Stats Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-            <div className="bg-white border-2 border-nobunaga-dark/30 p-4 rounded-xl text-center shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-slate-500">Total Cards</div>
-              <div className="font-display text-3xl font-black text-nobunaga-dark">{total}</div>
+            <div className="bg-slate-800/80 border border-slate-700/80 p-4 rounded-xl text-center shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Total Answered</div>
+              <div className="font-display text-3xl font-black text-white">{total}</div>
             </div>
-            <div className="bg-white border-2 border-nobunaga-dark/30 p-4 rounded-xl text-center shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-slate-500">Recall Rate</div>
-              <div className="font-display text-3xl font-black text-emerald-600">{accuracy}%</div>
+            <div className="bg-slate-800/80 border border-slate-700/80 p-4 rounded-xl text-center shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Accuracy</div>
+              <div className="font-display text-3xl font-black text-emerald-400">{accuracy}%</div>
             </div>
-            <div className="bg-white border-2 border-nobunaga-dark/30 p-4 rounded-xl text-center shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-slate-500">Current Streak</div>
-              <div className="font-display text-3xl font-black text-amber-500 flex items-center justify-center gap-1">
-                <Flame size={20} className="fill-amber-500 text-amber-500" />
-                <span>{user?.streak_days || 1}d</span>
+            <div className="bg-slate-800/80 border border-slate-700/80 p-4 rounded-xl text-center shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Correct</div>
+              <div className="font-display text-3xl font-black text-emerald-400 flex items-center justify-center gap-1">
+                <Check size={20} />
+                <span>{correctCount}</span>
               </div>
             </div>
-            <div className="bg-white border-2 border-nobunaga-dark/30 p-4 rounded-xl text-center shadow-sm">
-              <div className="text-[10px] uppercase font-bold text-slate-500">Easy Hits</div>
-              <div className="font-display text-3xl font-black text-indigo-600">{easyCount}</div>
-            </div>
-          </div>
-
-          {/* Breakdown Pills */}
-          <div className="bg-white border border-nobunaga-dark/20 p-4 rounded-2xl mb-8 flex items-center justify-between text-xs font-bold">
-            <span className="text-slate-600">Response Breakdown:</span>
-            <div className="flex gap-2">
-              <span className="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg">Again: {againCount}</span>
-              <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-lg">Hard: {hardCount}</span>
-              <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-lg">Good: {goodCount}</span>
-              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg">Easy: {easyCount}</span>
+            <div className="bg-slate-800/80 border border-slate-700/80 p-4 rounded-xl text-center shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Needs Review</div>
+              <div className="font-display text-3xl font-black text-rose-400 flex items-center justify-center gap-1">
+                <X size={20} />
+                <span>{missedCount}</span>
+              </div>
             </div>
           </div>
 
@@ -255,7 +293,7 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
             </button>
             <button
               onClick={loadDueReviews}
-              className="py-4 px-6 border-2 border-nobunaga-dark hover:bg-nobunaga-dark hover:text-white font-display text-sm tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
+              className="py-4 px-6 border border-slate-700 hover:bg-slate-800 text-slate-200 font-display text-sm tracking-wider uppercase rounded-xl transition-all flex items-center justify-center gap-2"
             >
               <RotateCcw size={16} />
               <span>Review Again</span>
@@ -266,11 +304,11 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
     );
   }
 
-  // 4. ACTIVE REVIEW SESSION (Calm, distraction-free screen)
+  // 4. ACTIVE MCQ REVIEW CARD
   const progressPercent = Math.round(((currentIndex) / queue.length) * 100);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col justify-between min-h-[calc(100vh-5rem)]">
+    <div className="max-w-2xl mx-auto px-4 py-6 flex flex-col justify-between min-h-[calc(100vh-5rem)] text-slate-100">
       {/* Top Header & Progress */}
       <div className="space-y-3 mb-4">
         <div className="flex items-center justify-between text-xs text-slate-400">
@@ -282,13 +320,20 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
             <span>Dashboard</span>
           </button>
           <div className="flex items-center gap-2 font-mono font-bold">
-            <span className="text-slate-200">{currentIndex + 1}</span>
+            <span className="text-white">{currentIndex + 1}</span>
             <span>/</span>
             <span>{queue.length}</span>
           </div>
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-            {currentCard.level || 'JLPT'}
-          </span>
+          <div className="flex items-center gap-2">
+            {currentCard.isRetry && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                Reinforcement
+              </span>
+            )}
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+              {currentCard.level || currentCard.jlpt_level || 'JLPT'}
+            </span>
+          </div>
         </div>
 
         {/* Progress bar */}
@@ -300,158 +345,181 @@ export default function ReviewSession({ onBackToDashboard, onBrowseDecks }) {
         </div>
       </div>
 
-      {/* 3D Calm Flashcard Container */}
-      <div
-        onClick={() => setFlipped(!flipped)}
-        className="w-full h-[380px] sm:h-[420px] perspective-1000 cursor-pointer select-none my-auto"
-      >
-        <div
-          className={`relative w-full h-full transition-transform duration-500 transform-style-preserve-3d shadow-2xl rounded-3xl ${
-            flipped ? 'rotate-y-180' : ''
-          }`}
-        >
-          {/* FRONT OF CARD (Clean, calm, massive kanji) */}
-          <div className="absolute inset-0 backface-hidden bg-slate-900 border border-slate-700/80 rounded-3xl p-8 flex flex-col justify-between items-center text-slate-100 shadow-xl bg-paper-texture">
-            {/* Star color band at top */}
-            <div className="w-full flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${getStarColorBand(currentCard.stars)}`} />
-                <span className="text-xs font-semibold text-slate-400">
-                  {currentCard.stars}★ Level
-                </span>
-              </div>
-              <div className="flex text-amber-400 text-sm">
-                {'★'.repeat(currentCard.stars)}
-                <span className="text-slate-600">{'★'.repeat(5 - currentCard.stars)}</span>
-              </div>
-            </div>
-
-            {/* Huge Kanji Display */}
-            <div className="text-center my-auto flex flex-col items-center gap-4">
-              <div className="font-kanji text-7xl sm:text-8xl font-bold tracking-tight text-white hover:scale-105 transition-transform">
-                {currentCard.kanji}
-              </div>
-
-              {/* Pronunciation Audio Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  speakJapanese(currentCard.kana || currentCard.kanji);
-                }}
-                className="p-3 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 transition-colors border border-slate-700 shadow-md"
-                title="Hear Pronunciation (Voice)"
-              >
-                <Volume2 size={22} />
-              </button>
-            </div>
-
-            {/* Instruction pill */}
-            <div className="text-xs text-slate-400 font-medium bg-slate-800/60 px-4 py-2 rounded-xl border border-slate-700/60 flex items-center gap-2">
-              <span>Press Space or tap to flip</span>
-            </div>
+      {/* Main MCQ Vocab Question Card */}
+      <div className="w-full bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col my-auto relative">
+        {/* Star & Deck Header */}
+        <div className="w-full flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${getStarColorBand(currentCard.stars ?? currentCard.star_rating ?? 1)}`} />
+            <span className="text-xs font-semibold text-slate-400">
+              {currentCard.stars ?? currentCard.star_rating ?? 1}★ Mastery Level
+            </span>
           </div>
-
-          {/* BACK OF CARD (Complete breakdown, meaning, mnemonic, example) */}
-          <div className="absolute inset-0 backface-hidden rotate-y-180 bg-slate-900 border border-slate-700/80 rounded-3xl p-6 sm:p-8 flex flex-col justify-between text-slate-100 shadow-xl overflow-y-auto bg-paper-texture">
-            <div>
-              {/* Header with audio */}
-              <div className="flex justify-between items-center pb-2 border-b border-slate-800 mb-3">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${getStarColorBand(currentCard.stars)}`} />
-                  <span className="text-xs font-bold text-slate-400">
-                    Next interval: {currentCard.interval_days || 1}d
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    speakJapanese(currentCard.kana || currentCard.kanji);
-                  }}
-                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400"
-                >
-                  <Volume2 size={18} />
-                </button>
-              </div>
-
-              {/* Japanese readings */}
-              <div className="flex flex-wrap items-baseline gap-3 mb-2">
-                <span className="font-kanji text-4xl font-bold text-white">{currentCard.kanji}</span>
-                <span className="text-2xl text-amber-300 font-medium">{currentCard.kana}</span>
-                <span className="text-xs text-slate-400 font-mono">[{currentCard.romaji}]</span>
-              </div>
-
-              {/* English Meaning */}
-              <h3 className="text-xl font-bold text-slate-100 mb-3">{currentCard.meaning}</h3>
-
-              {/* Example Sentence */}
-              {currentCard.example_sentence && (
-                <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl p-3 text-xs mb-3 space-y-1">
-                  <p className="font-kanji text-sm text-slate-200">{currentCard.example_sentence}</p>
-                  <p className="text-slate-400 italic">{currentCard.example_translation}</p>
-                </div>
-              )}
-
-              {/* Mnemonic */}
-              {currentCard.mnemonic && (
-                <div className="text-xs text-amber-200/90 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl">
-                  <span className="font-bold text-amber-400">Mnemonic: </span>
-                  {currentCard.mnemonic}
-                </div>
-              )}
-            </div>
-
-            <div className="text-[11px] text-center text-slate-400 pt-2 border-t border-slate-800">
-              Rate your recall below to schedule next review
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400 font-mono">
+              {currentCard.deck_name ? `${currentCard.deck_name}` : `Lesson ${currentCard.lesson_number || 1}`}
+            </span>
+            <div className="flex text-amber-400 text-sm">
+              {'★'.repeat(currentCard.stars ?? currentCard.star_rating ?? 1)}
+              <span className="text-slate-700">{'★'.repeat(5 - (currentCard.stars ?? currentCard.star_rating ?? 1))}</span>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Bottom Rating Controls (Optimized for one-handed mobile reach) */}
-      <div className="pt-4 pb-2">
-        {!flipped ? (
-          <button
-            onClick={() => setFlipped(true)}
-            className="w-full py-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl text-white font-display text-sm tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2"
-          >
-            <span>Show Answer (Space)</span>
-          </button>
-        ) : (
-          <div className="grid grid-cols-4 gap-2">
+        {/* Japanese Vocabulary Display (Massive Kanji + Kana + Romaji) */}
+        <div className="text-center py-6 flex flex-col items-center gap-3">
+          {/* Kanji */}
+          <div className="font-kanji text-6xl sm:text-7xl font-bold tracking-tight text-white">
+            {currentCard.kanji || currentCard.kana}
+          </div>
+
+          {/* Kana & Romaji Display */}
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+            {currentCard.kanji && (
+              <span className="text-2xl text-amber-300 font-medium">
+                {currentCard.kana}
+              </span>
+            )}
+
+            {/* Romaji (prominently shown alongside Japanese) */}
+            {currentCard.romaji && (
+              <span className="px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-sm text-sky-300 font-semibold tracking-wide">
+                [{currentCard.romaji}]
+              </span>
+            )}
+
+            {/* Pronunciation Audio Button */}
             <button
-              disabled={submitting}
-              onClick={() => handleRate('again')}
-              className="py-3 px-1 sm:px-2 rounded-2xl bg-red-950/70 hover:bg-red-900 border border-red-700 text-red-200 flex flex-col items-center justify-center transition-all active:scale-95 shadow-md"
+              onClick={() => speakJapanese(currentCard.kana || currentCard.kanji)}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-300 transition-colors border border-slate-700 shadow-sm ml-1"
+              title="Hear Pronunciation"
             >
-              <span className="font-display text-xs sm:text-sm font-bold uppercase">Again</span>
-              <span className="text-[10px] text-red-400 mt-0.5">&lt; 1d (1)</span>
+              <Volume2 size={18} />
             </button>
+          </div>
 
-            <button
-              disabled={submitting}
-              onClick={() => handleRate('hard')}
-              className="py-3 px-1 sm:px-2 rounded-2xl bg-amber-950/70 hover:bg-amber-900 border border-amber-700 text-amber-200 flex flex-col items-center justify-center transition-all active:scale-95 shadow-md"
-            >
-              <span className="font-display text-xs sm:text-sm font-bold uppercase">Hard</span>
-              <span className="text-[10px] text-amber-400 mt-0.5">Slow (2)</span>
-            </button>
+          <p className="text-xs text-slate-400 mt-1">
+            {!answered ? 'Choose the correct English meaning below (or press 1–4):' : 'Spaced repetition recall evaluated:'}
+          </p>
+        </div>
 
-            <button
-              disabled={submitting}
-              onClick={() => handleRate('good')}
-              className="py-3 px-1 sm:px-2 rounded-2xl bg-blue-950/70 hover:bg-blue-900 border border-blue-700 text-blue-200 flex flex-col items-center justify-center transition-all active:scale-95 shadow-md"
-            >
-              <span className="font-display text-xs sm:text-sm font-bold uppercase">Good</span>
-              <span className="text-[10px] text-blue-400 mt-0.5">Optimal (3)</span>
-            </button>
+        {/* 4 Multiple Choice Options (MCQ) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 pb-4">
+          {options.map((opt, idx) => {
+            const isTarget = opt.trim().toLowerCase() === currentCard.meaning.trim().toLowerCase();
+            const isUserPick = selectedOption === opt;
 
+            let buttonStyle = 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-100 hover:border-slate-500';
+
+            if (answered) {
+              if (isTarget) {
+                // Correct answer always glows green
+                buttonStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-500/20';
+              } else if (isUserPick) {
+                // User picked wrong option turns red
+                buttonStyle = 'bg-rose-950/80 border-rose-500 text-rose-200 shadow-lg shadow-rose-500/20';
+              } else {
+                // Other options fade out
+                buttonStyle = 'bg-slate-800/30 border-slate-800/60 text-slate-500 opacity-40';
+              }
+            }
+
+            return (
+              <button
+                key={idx}
+                type="button"
+                disabled={answered || submitting}
+                onClick={() => handleSelectOption(opt)}
+                className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 flex items-center justify-between group ${buttonStyle} ${
+                  !answered ? 'active:scale-[0.98]' : ''
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                    answered && isTarget
+                      ? 'bg-emerald-500 text-white'
+                      : answered && isUserPick
+                      ? 'bg-rose-500 text-white'
+                      : 'bg-slate-700/80 text-slate-300 group-hover:bg-slate-600'
+                  }`}>
+                    {idx + 1}
+                  </span>
+                  <span className="text-sm font-semibold leading-snug">{opt}</span>
+                </div>
+
+                {answered && isTarget && (
+                  <CheckCircle size={18} className="text-emerald-400 shrink-0 ml-2" />
+                )}
+                {answered && isUserPick && !isTarget && (
+                  <XCircle size={18} className="text-rose-400 shrink-0 ml-2" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Revealed Context & SM-2 Feedback After Answering */}
+        {answered && (
+          <div className="mt-3 pt-4 border-t border-slate-800 space-y-3 animate-fade-in">
+            {/* Feedback Banner */}
+            <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${
+              isCorrect
+                ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-300'
+                : 'bg-rose-950/60 border-rose-600/50 text-rose-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                {isCorrect ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                <span className="font-bold">
+                  {isCorrect ? 'Correct! SM-2 interval expanded.' : 'Incorrect. Scheduled for recall reinforcement.'}
+                </span>
+              </div>
+              {lastResult && (
+                <span className="font-mono text-[11px] font-semibold text-slate-300">
+                  Next due: {lastResult.interval_days || 1}d
+                </span>
+              )}
+            </div>
+
+            {/* Example sentence & mnemonic */}
+            {(currentCard.example_sentence || currentCard.example_ja || currentCard.mnemonic) && (
+              <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 text-xs space-y-2">
+                {(currentCard.example_sentence || currentCard.example_ja) && (
+                  <div>
+                    <div className="flex items-center justify-between text-slate-400 mb-1">
+                      <span className="font-bold uppercase tracking-wider text-[10px]">Example Sentence</span>
+                      <button
+                        onClick={() => speakJapanese(currentCard.example_sentence || currentCard.example_ja)}
+                        className="text-amber-400 hover:underline flex items-center gap-1 text-[11px]"
+                      >
+                        <Volume2 size={12} />
+                        <span>Listen</span>
+                      </button>
+                    </div>
+                    <p className="font-kanji text-sm text-slate-200">
+                      {currentCard.example_sentence || currentCard.example_ja}
+                    </p>
+                    <p className="text-slate-400 italic mt-0.5">
+                      {currentCard.example_translation || currentCard.example_en}
+                    </p>
+                  </div>
+                )}
+
+                {currentCard.mnemonic && (
+                  <div className="pt-2 border-t border-slate-700/40 text-amber-200/90">
+                    <span className="font-bold text-amber-400">Mnemonic: </span>
+                    {currentCard.mnemonic}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Next Card Button */}
             <button
-              disabled={submitting}
-              onClick={() => handleRate('easy')}
-              className="py-3 px-1 sm:px-2 rounded-2xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700 text-emerald-200 flex flex-col items-center justify-center transition-all active:scale-95 shadow-md"
+              onClick={handleNext}
+              className="w-full py-3.5 bg-nobunaga-red hover:bg-nobunaga-crimson text-white font-display text-sm tracking-wider uppercase rounded-2xl transition-all shadow-lg shadow-nobunaga-red/25 flex items-center justify-center gap-2 mt-2"
             >
-              <span className="font-display text-xs sm:text-sm font-bold uppercase">Easy</span>
-              <span className="text-[10px] text-emerald-400 mt-0.5">Instant (4)</span>
+              <span>Next Word (Enter / Space)</span>
+              <ArrowRight size={16} />
             </button>
           </div>
         )}

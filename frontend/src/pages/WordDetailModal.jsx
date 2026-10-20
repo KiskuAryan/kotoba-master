@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Volume2, Sparkles, BookOpen, Save, CheckCircle2, Bookmark } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
@@ -13,6 +14,26 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
   const [inReview, setInReview] = useState(false);
 
   const { showToast } = useToast();
+
+  // Lock body scroll and handle ESC key
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (isOpen && wordId) {
@@ -77,28 +98,34 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 shadow-2xl text-slate-100 max-h-[90vh] flex flex-col">
+  const modalJSX = (
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 shadow-2xl text-slate-100 max-h-[85vh] flex flex-col my-auto">
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors z-10"
         >
           <X size={20} />
         </button>
 
         {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center">
+          <div className="py-24 flex flex-col items-center justify-center">
             <div className="w-10 h-10 border-4 border-nobunaga-red border-t-transparent rounded-full animate-spin mb-3" />
             <p className="text-xs text-slate-400">Loading word details...</p>
           </div>
         ) : !word ? (
-          <div className="py-12 text-center text-slate-400">Word not found.</div>
+          <div className="py-16 text-center text-slate-400">Word not found.</div>
         ) : (
           <div className="space-y-6 overflow-y-auto pr-1">
             {/* Word Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800 pr-8">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col">
                   <span className="font-kanji text-5xl font-bold text-white">{word.kanji}</span>
@@ -108,6 +135,7 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => speakJapanese(word.kana || word.kanji)}
                   className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition-colors ml-2"
                   title="Pronounce"
@@ -118,11 +146,12 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
 
               <div className="text-right">
                 <div className="text-amber-400 font-bold text-sm">
-                  {'★'.repeat(word.stars || 1)}
-                  <span className="text-slate-600">{'★'.repeat(5 - (word.stars || 1))}</span>
+                  {'★'.repeat(word.stars ?? word.progress?.star_rating ?? 1)}
+                  <span className="text-slate-600">{'★'.repeat(5 - (word.stars ?? word.progress?.star_rating ?? 1))}</span>
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">Level: {word.level || 'N5'}</div>
+                <div className="text-[11px] text-slate-400 mt-1">Level: {word.level || word.jlpt_level || 'N5'}</div>
                 <button
+                  type="button"
                   onClick={handleToggleReview}
                   className={`mt-2 px-3 py-1 text-[11px] font-bold rounded-lg border flex items-center gap-1 transition-all ${
                     inReview
@@ -148,9 +177,10 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
             <div className="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-4 space-y-1.5">
               <div className="flex justify-between items-center text-xs text-slate-400">
                 <span className="font-bold uppercase tracking-wider">Example Sentence</span>
-                {word.example_sentence && (
+                {(word.example_sentence || word.example_ja) && (
                   <button
-                    onClick={() => speakJapanese(word.example_sentence)}
+                    type="button"
+                    onClick={() => speakJapanese(word.example_sentence || word.example_ja)}
                     className="text-amber-400 hover:underline flex items-center gap-1"
                   >
                     <Volume2 size={13} />
@@ -159,10 +189,10 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
                 )}
               </div>
               <p className="font-kanji text-base text-slate-200">
-                {word.example_sentence || 'No example sentence added yet.'}
+                {word.example_sentence || word.example_ja || 'No example sentence added yet.'}
               </p>
               <p className="text-xs text-slate-400 italic">
-                {word.example_translation || ''}
+                {word.example_translation || word.example_en || ''}
               </p>
             </div>
 
@@ -173,6 +203,7 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
                   Memory Mnemonic
                 </span>
                 <button
+                  type="button"
                   disabled={generatingAi}
                   onClick={handleGenerateAi}
                   className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors"
@@ -193,6 +224,7 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
                   Personal Study Notes
                 </label>
                 <button
+                  type="button"
                   disabled={savingNotes}
                   onClick={handleSaveNotes}
                   className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 border border-slate-700"
@@ -214,4 +246,6 @@ export default function WordDetailModal({ wordId, isOpen, onClose, onWordUpdated
       </div>
     </div>
   );
+
+  return createPortal(modalJSX, document.body);
 }

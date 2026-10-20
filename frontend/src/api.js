@@ -61,35 +61,122 @@ export const api = {
     request('/auth/dev-emails'),
 
   // Decks
-  getDecks: (level) =>
-    request(level ? `/decks?level=${level}` : '/decks'),
-  getDeckDetail: (deckId) =>
-    request(`/decks/${deckId}`),
+  getDecks: async (level) => {
+    const data = await request(level ? `/decks?level=${level}` : '/decks');
+    if (!Array.isArray(data)) return [];
+    return data.map((d) => ({
+      ...d,
+      title: d.title || d.name || 'Untitled Deck',
+      name: d.name || d.title || 'Untitled Deck',
+      japanese_title: d.japanese_title || d.name_ja || '',
+      name_ja: d.name_ja || d.japanese_title || '',
+      level: d.level || d.jlpt_level || 'N5',
+      jlpt_level: d.jlpt_level || d.level || 'N5',
+      word_count: d.word_count ?? d.total_words ?? 0,
+      total_words: d.total_words ?? d.word_count ?? 0
+    }));
+  },
+  getDeckDetail: async (deckId) => {
+    const d = await request(`/decks/${deckId}`);
+    if (!d) return null;
+    const words = (d.words || []).map((w) => ({
+      ...w,
+      stars: w.stars ?? w.progress?.star_rating ?? 1,
+      level: w.level ?? w.jlpt_level ?? 'N5',
+      example_sentence: w.example_sentence ?? w.example_ja ?? '',
+      example_translation: w.example_translation ?? w.example_en ?? '',
+      is_in_review: w.is_in_review ?? w.progress?.is_in_review ?? false,
+      user_notes: w.user_notes ?? w.progress?.user_notes ?? ''
+    }));
+    return {
+      ...d,
+      title: d.title || d.name || 'Untitled Deck',
+      name: d.name || d.title || 'Untitled Deck',
+      japanese_title: d.japanese_title || d.name_ja || '',
+      name_ja: d.name_ja || d.japanese_title || '',
+      level: d.level || d.jlpt_level || 'N5',
+      jlpt_level: d.jlpt_level || d.level || 'N5',
+      word_count: d.word_count ?? d.total_words ?? words.length,
+      total_words: d.total_words ?? d.word_count ?? words.length,
+      words
+    };
+  },
   addDeckToQueue: (deckId) =>
     request(`/decks/${deckId}/add-to-queue`, { method: 'POST' }),
+
+  // Chapters & Minna no Nihongo Lessons
+  getChapters: async () => {
+    const res = await request('/chapters');
+    return Array.isArray(res) ? res : [];
+  },
+  getChapterWords: async (lessonNumber) => {
+    const res = await request(`/chapters/${lessonNumber}/words`);
+    return Array.isArray(res) ? res : [];
+  },
+  addChapterToQueue: (lessonNumber) =>
+    request(`/chapters/${lessonNumber}/add-all-to-review`, { method: 'POST' }),
 
   // Words
   getWords: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return request(query ? `/words?${query}` : '/words');
   },
-  getWordDetail: (wordId) =>
-    request(`/words/${wordId}`),
+  getWordDetail: async (wordId) => {
+    const data = await request(`/words/${wordId}`);
+    if (!data) return null;
+    return {
+      ...data,
+      stars: data.stars ?? data.progress?.star_rating ?? 1,
+      level: data.level ?? data.jlpt_level ?? 'N5',
+      example_sentence: data.example_sentence ?? data.example_ja ?? '',
+      example_translation: data.example_translation ?? data.example_en ?? '',
+      is_in_review: data.is_in_review ?? data.progress?.is_in_review ?? false,
+      user_notes: data.user_notes ?? data.progress?.user_notes ?? ''
+    };
+  },
   updateWordNotes: (wordId, notes) =>
     request(`/words/${wordId}/notes`, { method: 'PUT', body: JSON.stringify({ notes }) }),
   toggleWordReview: (wordId, is_in_review) =>
     request(`/words/${wordId}/toggle-review`, { method: 'POST', body: JSON.stringify({ is_in_review }) }),
 
   // Reviews & SM-2
-  getDueReviews: (params = {}) => {
+  getDueReviews: async (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return request(query ? `/reviews/due?${query}` : '/reviews/due');
+    const data = await request(query ? `/reviews/due?${query}` : '/reviews/due');
+    const rawCards = Array.isArray(data) ? data : (data?.cards || []);
+    const cards = rawCards.map((c) => ({
+      ...c,
+      id: c.id ?? c.word_id,
+      word_id: c.word_id ?? c.id,
+      romaji: c.romaji || '',
+      options: c.options || [],
+      stars: c.stars ?? c.star_rating ?? 1,
+      star_rating: c.star_rating ?? c.stars ?? 1,
+      level: c.level ?? c.jlpt_level ?? 'N5',
+      example_sentence: c.example_sentence ?? c.example_ja ?? '',
+      example_translation: c.example_translation ?? c.example_en ?? ''
+    }));
+    cards.due_count = data?.due_count ?? cards.length;
+    cards.queue_size = data?.queue_size ?? cards.length;
+    return cards;
   },
-  submitReview: (wordId, rating, responseTimeMs = 0) =>
-    request('/reviews/submit', {
+  submitReview: async (wordId, payloadOrRating, responseTimeMs = 0) => {
+    let body = { word_id: wordId };
+    if (typeof payloadOrRating === 'object') {
+      body = { ...body, ...payloadOrRating };
+    } else {
+      body = { ...body, rating: payloadOrRating, response_time_ms: responseTimeMs };
+    }
+    const res = await request('/reviews/submit', {
       method: 'POST',
-      body: JSON.stringify({ word_id: wordId, rating, response_time_ms: responseTimeMs })
-    }),
+      body: JSON.stringify(body)
+    });
+    return {
+      ...res,
+      stars: res.stars ?? res.star_rating_after,
+      newStars: res.newStars ?? res.star_rating_after
+    };
+  },
 
   // Stats
   getStats: () =>

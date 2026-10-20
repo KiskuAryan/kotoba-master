@@ -86,6 +86,10 @@ def test_decks_listing_and_queue(client):
     assert len(decks) >= 2
     deck1 = next(d for d in decks if d["slug"] == "n5-daily-essentials")
     assert deck1["total_words"] == 2
+    assert deck1["word_count"] == 2
+    assert deck1["title"] == deck1["name"]
+    assert deck1["japanese_title"] == deck1["name_ja"]
+    assert deck1["level"] == "N5"
     assert deck1["words_in_review"] == 1
 
     # Add all words of deck 1 to review queue
@@ -99,6 +103,11 @@ def test_decks_listing_and_queue(client):
     detail = res_detail.json()
     assert detail["words_in_review"] == 2
     assert len(detail["words"]) == 2
+    assert detail["title"] == "Daily Essentials"
+    assert detail["word_count"] == 2
+    assert detail["level"] == "N5"
+    assert detail["words"][0]["stars"] == 1
+    assert detail["words"][0]["level"] == "N5"
 
 
 def test_words_search_and_notes(client):
